@@ -128,7 +128,7 @@ export function VCFGView({ graph, activeNodeId }: Props) {
 					ドラッグで移動、ホイールでズーム
 				</div>
 			</div>
-			<div className="h-[360px] w-full rounded border border-neutral-100">
+			<div className="flex-1 min-h-[420px] w-full rounded border border-neutral-100">
 				<ReactFlow
 					nodes={nodes}
 					edges={edges}

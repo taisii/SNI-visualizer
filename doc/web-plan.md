@@ -16,7 +16,7 @@
 
 ## フェーズ 1: UX 一貫性の確保（軽微改修）
 1. **入力変更で結果をクリア**  
-   - 今は `CodeEditor` の `onChange` でソースのみ更新し結果は残存（`app/(analysis)/page.tsx:124-125`）。  
+   - 今は `CodeEditor` の `onChange` でソースのみ更新し結果は残存（`app/(analysis)/page.tsx:136` 付近）。  
    - 方針: 編集開始で `setResult(null); setCurrentStep(0);` を行い、トレースの不整合を防ぐ。  
    - DOD: 編集→右ペインがプレースホルダに戻り、再解析まで Prev/Next は無効。
 2. **エラー時のUI挙動のテスト追加**  

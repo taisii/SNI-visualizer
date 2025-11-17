@@ -31,6 +31,7 @@
 - Web UI (`app/(analysis)/page.tsx` ほか):
   - `analyze(source, { traceMode })` を直接呼び出し、VCFG と抽象状態を描画。  
   - Prev/Next/Auto Play、トレースモード切替（single-path デフォルト / bfs）。  
+  - 左ペイン: 操作パネル（sticky）＋ VCFG ビュー。右ペイン: MuASM エディタ（Accordion で折りたたみ可）＋ 抽象状態ビュー。  
   - 解析失敗時は Toast 表示＋結果クリア。ポリシー入力 UI は未実装。  
   - 入力編集時も結果保持（既知制約）。
 - テスト:
@@ -46,9 +47,9 @@
 - `AbstractState.sections[]`: 汎用セクション配列。`DisplayValue { label, style, detail? }` で色分け。
 
 ## 4. 現行 UI 挙動
-- 左ペイン: コントロール（解析/Prev/Next/AutoPlay/Reset、traceMode 選択）、MuASM エディタ。  
+- 左ペイン: コントロール（解析/Prev/Next/AutoPlay/Reset、traceMode 選択）と VCFG (React Flow, flex-1 で列の残り高さを占有)。  
   - 入力変更時も結果は残るため、再解析は手動。  
-- 右ペイン: VCFG (React Flow) と抽象状態ビュー。`activeNodeId` に同期してハイライト。  
+- 右ペイン: MuASM エディタ（Accordion 折りたたみ）と抽象状態ビュー。`activeNodeId` に同期してハイライト。  
 - Auto Play: 800ms 間隔で前進し、違反検出 or 末尾で停止。  
 - エラー時: Toast 表示し結果を破棄。
 

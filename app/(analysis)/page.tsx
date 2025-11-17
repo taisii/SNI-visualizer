@@ -103,7 +103,7 @@ export default function Home() {
 			<Header result={result?.result ?? null} />
 			<Toaster richColors position="bottom-right" />
 			<main className="grid flex-1 grid-cols-1 gap-4 p-6 lg:grid-cols-2">
-				<section className="flex flex-col gap-3">
+				<section className="flex flex-col gap-3 lg:min-h-[calc(100vh-140px)]">
 					<div className="sticky top-6 z-10">
 						<ControlPanel
 							canPrev={controlState.canPrev}
@@ -121,11 +121,7 @@ export default function Home() {
 							onTraceModeChange={(mode) => setTraceMode(mode)}
 						/>
 					</div>
-					<CodeEditor value={source} onChange={(val) => setSource(val)} />
-				</section>
-
-				<section className="flex flex-col gap-3">
-					<div className="flex h-1/2 flex-col gap-2">
+					<div className="flex flex-1 flex-col gap-2">
 						<VCFGView
 							graph={result?.graph ?? null}
 							activeNodeId={activeStep?.nodeId ?? null}
@@ -134,6 +130,10 @@ export default function Home() {
 							現在ステップ: {activeStep ? activeStep.description : "未解析"}
 						</div>
 					</div>
+				</section>
+
+				<section className="flex flex-col gap-3">
+					<CodeEditor value={source} onChange={(val) => setSource(val)} />
 					<div className="flex-1">
 						<StateViewer
 							state={activeStep?.state ?? null}
