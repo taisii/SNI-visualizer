@@ -38,10 +38,11 @@ export function parse(code: string): Program {
       if (labels.has(label)) {
         throw new ParseError(`ラベル '${label}' が重複しています`, { sourceLine });
       }
-      // ラベルは次の命令 PC に紐づける
+      // ラベルは次の命令 PC に紐づける（ラベル単独行も許容）
       labels.set(label, instructions.length);
       if (rest.length === 0) {
-        throw new ParseError("ラベルの後に命令が必要です", { sourceLine });
+        // ラベルのみの行の場合、同じ PC に続く命令を紐づけるためスキップ
+        continue;
       }
     }
 

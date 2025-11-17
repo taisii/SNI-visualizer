@@ -1,11 +1,11 @@
-const DEFAULT_CODE = `# ptr++ ループ（デモ用）
+const DEFAULT_CODE = `// 分岐誤予測でシークレットが観測されるデモ
 start:
-  load r1, [ptr]
-  add  ptr, 1
-  beqz r1, end
-  jmp  start
-end:
-  ret`;
+  load tmp, secret
+  beqz tmp, exit
+  store tmp, out
+exit:
+  spbarr
+  skip`;
 
 type Props = {
   value: string;

@@ -24,9 +24,8 @@ const edgeColors = {
   rollback: "#ef4444",
 } as const;
 
-function toNodes(graph: StaticGraph, activeNodeId: string | null): Node[] {
+function toNodes(graph: StaticGraph): Node[] {
   return graph.nodes.map((node, idx) => {
-    const isActive = node.id === activeNodeId;
     return {
       id: node.id,
       data: { label: node.label },
@@ -34,17 +33,21 @@ function toNodes(graph: StaticGraph, activeNodeId: string | null): Node[] {
         x: node.x ?? (node.type === "spec" ? 260 : 40),
         y: node.y ?? idx * 120,
       },
-      style: {
-        border: `2px solid ${isActive ? "#60a5fa" : nodeColors[node.type]}`,
-        background: isActive ? "#dbeafe" : "#ffffff",
-        color: "#0f172a",
-        padding: 8,
-        borderRadius: 8,
-        fontSize: 12,
-        boxShadow: isActive ? "0 0 0 3px rgba(96,165,250,0.3)" : "none",
-      },
+      style: baseNodeStyle(node.type, false),
     } satisfies Node;
   });
+}
+
+function baseNodeStyle(type: StaticGraph["nodes"][number]["type"], active: boolean) {
+  return {
+    border: `2px solid ${active ? "#60a5fa" : nodeColors[type]}`,
+    background: active ? "#dbeafe" : "#ffffff",
+    color: "#0f172a",
+    padding: 8,
+    borderRadius: 8,
+    fontSize: 12,
+    boxShadow: active ? "0 0 0 3px rgba(96,165,250,0.3)" : "none",
+  } as const;
 }
 
 function toEdges(graph: StaticGraph): Edge[] {
@@ -64,16 +67,21 @@ function toEdges(graph: StaticGraph): Edge[] {
 }
 
 export function VCFGView({ graph, activeNodeId }: Props) {
-  const initialNodes = useMemo(() => (graph ? toNodes(graph, activeNodeId) : []), [graph, activeNodeId]);
+  const initialNodes = useMemo(() => (graph ? toNodes(graph) : []), [graph]);
   const initialEdges = useMemo(() => (graph ? toEdges(graph) : []), [graph]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // activeNode 変更時に style を更新
+  // activeNode 変更時に style のみ更新（position を維持）
   useEffect(() => {
     if (!graph) return;
-    setNodes(toNodes(graph, activeNodeId));
+    setNodes((prev) =>
+      prev.map((n) => ({
+        ...n,
+        style: baseNodeStyle(graph.nodes.find((g) => g.id === n.id)?.type ?? "ns", n.id === activeNodeId),
+      })),
+    );
   }, [graph, activeNodeId, setNodes]);
 
   // graph 変更時にエッジも同期

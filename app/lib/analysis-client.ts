@@ -1,14 +1,35 @@
-import { mockAnalysisResult } from "../fixtures/mock-analysis-result";
-import type { AnalysisResult } from "../types/analysis-result";
+import { buildVCFG } from "@/vcfg-builder/src";
+import { analyzeVCFG } from "@/sni-engine/src/analysis";
+import { ANALYSIS_SCHEMA_VERSION, type AnalysisError, type AnalysisResult } from "../types/analysis-result";
 
-const MOCK_LATENCY_MS = 200;
+function buildErrorResult(type: AnalysisError["type"], message: string, detail?: unknown): AnalysisResult {
+  return {
+    schemaVersion: ANALYSIS_SCHEMA_VERSION,
+    graph: { nodes: [], edges: [] },
+    trace: { steps: [] },
+    result: "SNI_Violation",
+    error: {
+      type,
+      message,
+      detail,
+    },
+  };
+}
 
 /**
- * UI から解析エンジンを呼び出すためのファサード。
- * 現時点ではモック結果を返す。将来的に WebWorker / WASM へ置き換え予定。
+ * UI から解析エンジンを呼び出すファサード。
+ * VCFG ビルダー → SNI 判定エンジンの順で実行し、スキーマに沿った結果を返す。
  */
 export async function analyze(sourceCode: string): Promise<AnalysisResult> {
-  // sourceCode は現状未使用だが、将来的なエンジン実装を見据えて受け取っておく。
-  await new Promise((resolve) => setTimeout(resolve, MOCK_LATENCY_MS));
-  return mockAnalysisResult;
+  try {
+    const graph = buildVCFG(sourceCode);
+    return await analyzeVCFG(graph, {});
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "解析で例外が発生しました";
+    const type: AnalysisError["type"] = err instanceof Error && err.name === "ParseError"
+      ? "ParseError"
+      : "InternalError";
+    // buildVCFG が投げる ParseError を UI 側に伝搬させるため error フィールドで返す
+    return buildErrorResult(type, message, err);
+  }
 }

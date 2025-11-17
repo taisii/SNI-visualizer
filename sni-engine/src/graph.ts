@@ -17,9 +17,19 @@ export function parseGraph(input: StaticGraph): StaticGraph {
     if (n.type !== "ns" && n.type !== "spec") throw new Error(`node.type invalid: ${n.id}`);
   }
 
+  const nodeMap = new Map(input.nodes.map((n) => [n.id, n] as const));
+
   for (const e of input.edges) {
-    if (!ids.has(e.source)) throw new Error(`edge source missing node: ${e.source}`);
-    if (!ids.has(e.target)) throw new Error(`edge target missing node: ${e.target}`);
+    const srcNode = nodeMap.get(e.source);
+    const tgtNode = nodeMap.get(e.target);
+
+    if (!srcNode) {
+      throw new Error(`edge source missing node: ${e.source}`);
+    }
+    if (!tgtNode) {
+      const srcInfo = srcNode.label ?? srcNode.id;
+      throw new Error(`edge target missing node: ${e.target} (from ${e.source} '${srcInfo}')`);
+    }
     if (e.type !== "ns" && e.type !== "spec" && e.type !== "rollback") {
       throw new Error(`edge.type invalid on ${e.source}->${e.target}`);
     }

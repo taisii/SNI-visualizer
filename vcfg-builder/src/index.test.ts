@@ -63,6 +63,21 @@ later: skip
     expect(program.instructions[1]!.instr.op).toBe("skip");
   });
 
+  it("accepts label-only lines and ties label to the next instruction", () => {
+    const program = parse(`
+Loop:
+  load z, a
+  load a, c
+  beqz y, Loop
+    `);
+
+    expect(program.labels.get("Loop")).toBe(0);
+    expect(program.instructions).toHaveLength(3);
+    const beqz = program.instructions[2]!.instr;
+    if (beqz.op !== "beqz") throw new Error("expected beqz");
+    expect(beqz.targetPc).toBe(0);
+  });
+
   it("throws ParseError on invalid token", () => {
     expect(() => parse("foo @ 1")).toThrow(ParseError);
   });
@@ -231,6 +246,25 @@ L: skip
     const rollbackEdges = graph.edges.filter(e => e.type === "rollback");
     expect(rollbackEdges).toHaveLength(2);
     expect(new Set(rollbackEdges.map(e => e.target))).toEqual(new Set(["n1", "n2"]));
+  });
+
+  it("does not emit rollback to non-existent fallthrough after terminal branch", () => {
+    const graph = buildVCFG(
+      `
+Loop:
+  load z, a
+  load a, c
+  beqz y, Loop
+`,
+      2,
+    );
+
+    // 3 つの通常ノードのみ
+    expect(graph.nodes.filter(n => n.type === "ns").map(n => n.id)).toEqual(["n0", "n1", "n2"]);
+
+    // rollback の target に n3 が含まれないこと
+    const rollbackTargets = new Set(graph.edges.filter(e => e.type === "rollback").map(e => e.target));
+    expect(rollbackTargets.has("n3")).toBe(false);
   });
 
   it("spec nodes remain unique per speculation context", () => {

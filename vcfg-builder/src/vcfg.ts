@@ -43,6 +43,8 @@ export function buildVCFG(sourceCode: string, windowSize = 20): StaticGraph {
     return resolved;
   };
 
+  const hasPc = (pc: number) => pc >= 0 && pc < program.instructions.length;
+
   let specCounter = 0;
   const createSpecContextId = () => {
     const id = `spec${specCounter}`;
@@ -116,13 +118,17 @@ export function buildVCFG(sourceCode: string, windowSize = 20): StaticGraph {
     specContextId: string,
   ) {
     if (budget <= 0) {
-      addEdge({ source: fromNodeId, target: `n${rollbackIndex}`, type: "rollback" });
+      if (hasPc(rollbackIndex)) {
+        addEdge({ source: fromNodeId, target: `n${rollbackIndex}`, type: "rollback" });
+      }
       return;
     }
 
     const currentItem = program.instructions[currentIndex];
     if (!currentItem) {
-      addEdge({ source: fromNodeId, target: `n${rollbackIndex}`, type: "rollback" });
+      if (hasPc(rollbackIndex)) {
+        addEdge({ source: fromNodeId, target: `n${rollbackIndex}`, type: "rollback" });
+      }
       return;
     }
 
@@ -142,7 +148,9 @@ export function buildVCFG(sourceCode: string, windowSize = 20): StaticGraph {
 
     const nextBudget = budget - 1;
     if (nextBudget <= 0 || currentItem.instr.op === "spbarr") {
-      addEdge({ source: targetNodeId, target: `n${rollbackIndex}`, type: "rollback" });
+      if (hasPc(rollbackIndex)) {
+        addEdge({ source: targetNodeId, target: `n${rollbackIndex}`, type: "rollback" });
+      }
       return;
     }
 
