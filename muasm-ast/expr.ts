@@ -5,6 +5,6 @@ export type Register = Identifier;
 export type BinaryOp = "+" | "-" | "*" | "&";
 
 export type Expr =
-	| { kind: "reg"; name: Register }
-	| { kind: "int"; value: number }
-	| { kind: "binop"; op: BinaryOp; left: Expr; right: Expr };
+  | { kind: "reg"; name: Register }
+  | { kind: "int"; value: number }
+  | { kind: "binop"; op: BinaryOp; left: Expr; right: Expr };

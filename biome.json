@@ -1,18 +1,27 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.3.5/schema.json",
-	"files": {
-		"includes": [
-			"app/**/*.ts",
-			"app/**/*.tsx",
-			"lib/**",
-			"components/**",
-			"sni-engine/**",
-			"vcfg-builder/**",
-			"doc/**",
-			"*.ts",
-			"*.tsx",
-			"*.js",
-			"*.jsx"
-		]
-	}
+  "$schema": "https://biomejs.dev/schemas/2.3.5/schema.json",
+  "root": true,
+  "vcs": {
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!dist",
+      "!**/dist",
+      "!.next",
+      "!**/.next",
+      "!!**/build",
+      "!!**/coverage"
+    ]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
 }
