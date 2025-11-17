@@ -117,8 +117,10 @@ export function buildVCFG(sourceCode: string, windowSize = 20): StaticGraph {
     fromNodeId: string,
     specContextId: string,
   ) {
+    const isSpecSource = fromNodeId.includes("@");
+
     if (budget <= 0) {
-      if (hasPc(rollbackIndex)) {
+      if (isSpecSource && hasPc(rollbackIndex)) {
         addEdge({ source: fromNodeId, target: `n${rollbackIndex}`, type: "rollback" });
       }
       return;
@@ -126,7 +128,7 @@ export function buildVCFG(sourceCode: string, windowSize = 20): StaticGraph {
 
     const currentItem = program.instructions[currentIndex];
     if (!currentItem) {
-      if (hasPc(rollbackIndex)) {
+      if (isSpecSource && hasPc(rollbackIndex)) {
         addEdge({ source: fromNodeId, target: `n${rollbackIndex}`, type: "rollback" });
       }
       return;

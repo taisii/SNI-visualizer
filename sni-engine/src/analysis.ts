@@ -7,8 +7,17 @@ import type {
   TraceStep,
 } from "../../app/types/analysis-result";
 import { ANALYSIS_SCHEMA_VERSION } from "../../app/types/analysis-result";
-import { join, LatticeValue, toDisplay } from "./lattice";
-import { AbsState, InitPolicy, bottomState, cloneState, initState, defaultLattice } from "./state";
+import { join, type LatticeValue, toDisplay } from "./lattice";
+import {
+  type AbsState,
+  type InitPolicy,
+  bottomState,
+  cloneState,
+  initState,
+  type RelValue,
+  defaultMemRel,
+  defaultRegRel,
+} from "./state";
 import { parseGraph } from "./graph";
 
 type Mode = "NS" | "Speculative";
@@ -18,9 +27,51 @@ export type AnalyzeOptions = {
   policy?: InitPolicy;
   entryRegs?: string[];
   entryNodeId?: string;
+  maxSteps?: number;
 };
 
 const DEFAULT_CAP = 10_000;
+const DEFAULT_MAX_STEPS = 500;
+const normalizeOperand = (token: string): string => token.replace(/,+$/g, "");
+
+const INSTR_KEYWORDS = new Set([
+  "assign",
+  "op",
+  "load",
+  "store",
+  "cmov",
+  "beqz",
+  "jmp",
+  "spbarr",
+  "skip",
+]);
+
+function collectRegisterNames(graph: StaticGraph): Set<string> {
+  const regs = new Set<string>();
+  const tokenRe = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
+  for (const n of graph.nodes) {
+    const text = n.instruction ?? n.label ?? "";
+    const tokens = text.match(tokenRe) ?? [];
+    const opToken = tokens[0];
+    tokens.forEach((raw, idx) => {
+      const t = normalizeOperand(raw);
+      if (idx === 0 && INSTR_KEYWORDS.has(t)) return;
+      if (opToken === "beqz" && idx === tokens.length - 1) return; // ラベル除外
+      if (opToken === "jmp" && idx >= 1 && idx === tokens.length - 1) return;
+      if (INSTR_KEYWORDS.has(t)) return;
+      regs.add(t);
+    });
+  }
+  return regs;
+}
+
+function seedRegs(state: AbsState, regs: Set<string>) {
+  for (const r of regs) {
+    if (!state.regs.has(r)) {
+      state.regs.set(r, defaultRegRel());
+    }
+  }
+}
 
 function getEntryNode(graph: StaticGraph, entryNodeId?: string, nodeMap?: Map<string, GraphNode>): GraphNode {
   if (entryNodeId) {
@@ -35,63 +86,67 @@ function getAdj(graph: StaticGraph): Map<string, GraphEdge[]> {
   const adj = new Map<string, GraphEdge[]>();
   for (const e of graph.edges) {
     if (!adj.has(e.source)) adj.set(e.source, []);
-    adj.get(e.source)!.push(e);
+    const list = adj.get(e.source);
+    if (list) list.push(e);
   }
   return adj;
 }
 
-function obsKey(node: GraphNode): number {
-  return node.pc;
+// MEMLEAK 用: メモリアクセス観測の NS 側更新
+function updateMemObsNS(state: AbsState, obsId: string, observed: LatticeValue) {
+  // フェーズ2以降: NS でも Low/High を区別して履歴を構築する
+  const prev = state.obsMem.get(obsId) ?? "Bot";
+  const next = observed === "EqHigh" || observed === "Leak" || observed === "Top" ? "EqHigh" : "EqLow";
+  state.obsMem.set(obsId, join(prev, next));
 }
 
-function updateObsNS(state: AbsState, node: GraphNode, observed: LatticeValue) {
-  if (observed === "EqHigh") {
-    const prev = state.obs.get(obsKey(node)) ?? "Bot";
-    state.obs.set(obsKey(node), join(prev, "EqHigh"));
-  } else if (observed === "Leak" || observed === "Top") {
-    const prev = state.obs.get(obsKey(node)) ?? "Bot";
-    state.obs.set(obsKey(node), join(prev, observed));
-  }
-}
-
-function updateObsSpec(state: AbsState, node: GraphNode, observed: LatticeValue) {
+// MEMLEAK 用: メモリアクセス観測の Spec 側更新
+function updateMemObsSpec(state: AbsState, obsId: string, observed: LatticeValue) {
+  const prev = state.obsMem.get(obsId) ?? "Bot";
   if (observed === "EqHigh" || observed === "Leak" || observed === "Top") {
-    const prev = state.obs.get(obsKey(node)) ?? "Bot";
-    // NS 観測済みなら EqHigh を保持、それ以外は Leak にする
-    const next = prev === "EqHigh" ? "EqHigh" : "Leak";
-    state.obs.set(obsKey(node), join(prev, next));
+    const next = prev === "EqHigh" ? "EqHigh" : "Leak"; // baseline High のみ非違反、それ以外は漏洩
+    state.obsMem.set(obsId, join(prev, next));
+  } else if (observed === "EqLow") {
+    state.obsMem.set(obsId, join(prev, "EqLow"));
   }
 }
 
-function getReg(state: AbsState, name: string): LatticeValue {
-  return state.regs.get(name) ?? defaultLattice();
+// CTRLLEAK 用: 制御フロー観測の NS 側更新
+function updateCtrlObsNS(state: AbsState, obsId: string, observed: LatticeValue) {
+  const prev = state.obsCtrl.get(obsId) ?? "Bot";
+  const next = observed === "EqHigh" || observed === "Leak" || observed === "Top" ? "EqHigh" : "EqLow";
+  state.obsCtrl.set(obsId, join(prev, next));
 }
 
-function getMem(state: AbsState, name: string): LatticeValue {
-  return state.mem.get(name) ?? defaultLattice();
+// CTRLLEAK 用: 制御フロー観測の Spec 側更新
+function updateCtrlObsSpec(state: AbsState, obsId: string, observed: LatticeValue) {
+  const prev = state.obsCtrl.get(obsId) ?? "Bot";
+  if (observed === "EqHigh" || observed === "Leak" || observed === "Top") {
+    const next = prev === "EqHigh" ? "EqHigh" : "Leak";
+    state.obsCtrl.set(obsId, join(prev, next));
+  } else if (observed === "EqLow") {
+    state.obsCtrl.set(obsId, join(prev, "EqLow"));
+  }
 }
 
-function setReg(state: AbsState, name: string, value: LatticeValue) {
+function relJoin(a: RelValue, b: RelValue): RelValue {
+  return { ns: join(a.ns, b.ns), sp: join(a.sp, b.sp) };
+}
+
+function getReg(state: AbsState, name: string): RelValue {
+  return state.regs.get(name) ?? defaultRegRel();
+}
+
+function getMem(state: AbsState, name: string): RelValue {
+  return state.mem.get(name) ?? defaultMemRel();
+}
+
+function setReg(state: AbsState, name: string, value: RelValue) {
   state.regs.set(name, value);
 }
 
-function setMem(state: AbsState, name: string, value: LatticeValue) {
+function setMem(state: AbsState, name: string, value: RelValue) {
   state.mem.set(name, value);
-}
-
-function specAssign(prev: LatticeValue, newVal: LatticeValue): LatticeValue {
-  if (prev === "Bot") return newVal;
-  if (prev === "EqLow") {
-    if (newVal === "EqLow") return "EqLow";
-    if (newVal === "Diverge") return "Diverge";
-    if (newVal === "EqHigh" || newVal === "Leak" || newVal === "Top") return "Leak";
-  }
-  if (prev === "EqHigh") {
-    if (newVal === "EqHigh") return "EqHigh";
-    return "Top";
-  }
-  // fallback: conservative join
-  return join(prev, newVal);
 }
 
 function applyInstruction(
@@ -101,23 +156,41 @@ function applyInstruction(
 ): AbsState {
   const next = cloneState(state);
   const instrRaw = node.instruction ?? node.label ?? "";
-  const [op, ...rest] = instrRaw.trim().split(/\s+/);
+  const [opRaw, ...restRaw] = instrRaw.trim().split(/\s+/);
+  const op = normalizeOperand(opRaw);
+  const rest = restRaw.map(normalizeOperand);
 
-  const setValue = (kind: "reg" | "mem", name: string, value: LatticeValue) => {
+  // 観測キー: load/store は "pc:addr"、それ以外は pc 文字列（制御用）
+  const memObsId = (() => {
+    if (op === "load") {
+      const [, addr] = rest;
+      return `${node.pc}:${addr ?? ""}`;
+    }
+    if (op === "store") {
+      const [, addr] = rest;
+      return `${node.pc}:${addr ?? ""}`;
+    }
+    return undefined;
+  })();
+  const ctrlObsId = String(node.pc);
+
+  const setValue = (kind: "reg" | "mem", name: string, value: RelValue) => {
     if (mode === "NS") {
       kind === "reg" ? setReg(next, name, value) : setMem(next, name, value);
     } else {
       const prev = kind === "reg" ? getReg(next, name) : getMem(next, name);
-      const v = specAssign(prev, value);
-      kind === "reg" ? setReg(next, name, v) : setMem(next, name, v);
+      // NS 成分は維持し、SP 成分のみ更新を join で反映
+      const updated: RelValue = { ns: prev.ns, sp: join(prev.sp, value.sp) };
+      kind === "reg" ? setReg(next, name, updated) : setMem(next, name, updated);
     }
   };
 
-  const observe = (val: LatticeValue) => {
+  const observeMem = (val: LatticeValue) => {
+    if (!memObsId) return;
     if (mode === "NS") {
-      updateObsNS(next, node, val);
+      updateMemObsNS(next, memObsId, val);
     } else {
-      updateObsSpec(next, node, val);
+      updateMemObsSpec(next, memObsId, val);
     }
   };
 
@@ -133,7 +206,9 @@ function applyInstruction(
     }
     case "op": { // binary op dst a b
       const [dst, a, b] = rest;
-      const v = join(getReg(state, a), getReg(state, b));
+      const ra = getReg(state, a);
+      const rb = getReg(state, b);
+      const v = relJoin(ra, rb);
       setValue("reg", dst, v);
       break;
     }
@@ -141,8 +216,15 @@ function applyInstruction(
       const [dst, addr] = rest;
       const lAddr = getReg(state, addr);
       const lVal = getMem(state, addr);
-      observe(lVal === "Bot" ? lAddr : join(lVal, lAddr));
-      const v = join(lVal, lAddr);
+      const v: RelValue = {
+        ns: join(lVal.ns, lAddr.ns),
+        sp: join(lVal.sp, lAddr.sp),
+      };
+      // 観測はアドレスのみ（フェーズ2）: NS/SP それぞれの成分で評価
+      const observed = mode === "NS"
+        ? (lAddr.ns === "EqHigh" || lAddr.ns === "Leak" || lAddr.ns === "Top" ? "EqHigh" : "EqLow")
+        : (lAddr.sp === "EqHigh" || lAddr.sp === "Leak" || lAddr.sp === "Top" ? "EqHigh" : "EqLow");
+      observeMem(observed);
       setValue("reg", dst, v);
       break;
     }
@@ -150,49 +232,68 @@ function applyInstruction(
       const [src, addr] = rest;
       const lAddr = getReg(state, addr);
       const lVal = getReg(state, src);
-      observe(lVal === "Bot" ? lAddr : join(lVal, lAddr));
-      const v = join(lVal, lAddr);
+      const v: RelValue = {
+        ns: join(lVal.ns, lAddr.ns),
+        sp: join(lVal.sp, lAddr.sp),
+      };
+      const observed = mode === "NS"
+        ? (lAddr.ns === "EqHigh" || lAddr.ns === "Leak" || lAddr.ns === "Top" ? "EqHigh" : "EqLow")
+        : (lAddr.sp === "EqHigh" || lAddr.sp === "Leak" || lAddr.sp === "Top" ? "EqHigh" : "EqLow");
+      observeMem(observed);
       setValue("mem", addr, v);
       break;
     }
     case "cmov": { // cmov dst cond src
       const [dst, cond, src] = rest;
-      const v = join(getReg(state, cond), getReg(state, src));
+      const v = relJoin(getReg(state, cond), getReg(state, src));
       setValue("reg", dst, v);
       break;
     }
     case "spbarr":
       // 投機ウィンドウ閉鎖はグラフ構造で表現されるため、ここでは状態変化なし
       break;
-    case "beqz":
-    case "jmp":
-      // 制御は VCFG edges が持つので状態変化なし
-      break;
-    default:
-      // 未知命令は安全側 Top へ: 既知レジスタ/メモリ/観測を Top でつぶす
-      const obsVal = mode === "NS" ? updateObsNS : updateObsSpec;
-      // 既存の観測を Top へ
-      obsVal(next, node, "Top");
-      for (const k of next.regs.keys()) {
-        setReg(next, k, join(getReg(next, k), "Top"));
-      }
-      for (const k of next.mem.keys()) {
-        setMem(next, k, join(getMem(next, k), "Top"));
+    case "beqz": {
+      // 制御フロー観測 (CTRLLEAK 用)。条件レジスタのレベルを観測する。
+      const [condReg] = rest;
+      const level = getReg(state, condReg);
+      const observed = mode === "NS" ? level.ns : level.sp;
+      if (mode === "NS") {
+        updateCtrlObsNS(next, ctrlObsId, observed);
+      } else {
+        updateCtrlObsSpec(next, ctrlObsId, observed);
       }
       break;
+    }
+    case "jmp": {
+      // 現段階では制御フローを Low とみなす（将来、式のレベルに応じた扱いに拡張可）
+      const level: LatticeValue = "EqLow";
+      if (mode === "NS") {
+        updateCtrlObsNS(next, ctrlObsId, level);
+      } else {
+        updateCtrlObsSpec(next, ctrlObsId, level);
+      }
+      break;
+    }
+    default: {
+      throw new Error(`unsupported instruction '${op}' at pc=${node.pc}`);
+    }
   }
 
   return next;
 }
 
-function mergeState(dst: AbsState, src: AbsState, opts: { regs?: boolean; mem?: boolean; obs?: boolean } = {}): { changed: boolean } {
-  const { regs = true, mem = true, obs = true } = opts;
+function mergeState(
+  dst: AbsState,
+  src: AbsState,
+  opts: { regs?: boolean; mem?: boolean; obsMem?: boolean; obsCtrl?: boolean } = {},
+): { changed: boolean } {
+  const { regs = true, mem = true, obsMem = true, obsCtrl = true } = opts;
   let changed = false;
   if (regs) {
     for (const [k, v] of src.regs) {
-      const cur = dst.regs.get(k) ?? "Bot";
-      const n = join(cur, v);
-      if (n !== cur) {
+      const cur = dst.regs.get(k) ?? defaultRegRel();
+      const n = relJoin(cur, v);
+      if (n.ns !== cur.ns || n.sp !== cur.sp) {
         dst.regs.set(k, n);
         changed = true;
       }
@@ -200,20 +301,30 @@ function mergeState(dst: AbsState, src: AbsState, opts: { regs?: boolean; mem?: 
   }
   if (mem) {
     for (const [k, v] of src.mem) {
-      const cur = dst.mem.get(k) ?? "Bot";
-      const n = join(cur, v);
-      if (n !== cur) {
+      const cur = dst.mem.get(k) ?? defaultMemRel();
+      const n = relJoin(cur, v);
+      if (n.ns !== cur.ns || n.sp !== cur.sp) {
         dst.mem.set(k, n);
         changed = true;
       }
     }
   }
-  if (obs) {
-    for (const [k, v] of src.obs) {
-      const cur = dst.obs.get(k) ?? "Bot";
+  if (obsMem) {
+    for (const [k, v] of src.obsMem) {
+      const cur = dst.obsMem.get(k) ?? "Bot";
       const n = join(cur, v);
       if (n !== cur) {
-        dst.obs.set(k, n);
+        dst.obsMem.set(k, n);
+        changed = true;
+      }
+    }
+  }
+  if (obsCtrl) {
+    for (const [k, v] of src.obsCtrl) {
+      const cur = dst.obsCtrl.get(k) ?? "Bot";
+      const n = join(cur, v);
+      if (n !== cur) {
+        dst.obsCtrl.set(k, n);
         changed = true;
       }
     }
@@ -224,7 +335,10 @@ function mergeState(dst: AbsState, src: AbsState, opts: { regs?: boolean; mem?: 
 function stateHasViolation(state: AbsState): boolean {
   // 仕様: 観測チャンネルに Leak/Top が現れた場合のみ違反とみなす。
   // 高機密がレジスタ・メモリに拡散しても観測されなければ許容とする。
-  for (const v of state.obs.values()) {
+  for (const v of state.obsMem.values()) {
+    if (v === "Leak" || v === "Top") return true;
+  }
+  for (const v of state.obsCtrl.values()) {
     if (v === "Leak" || v === "Top") return true;
   }
   return false;
@@ -233,57 +347,55 @@ function stateHasViolation(state: AbsState): boolean {
 function stateToSections(state: AbsState) {
   const regs: Record<string, ReturnType<typeof toDisplay>> = {};
   const mem: Record<string, ReturnType<typeof toDisplay>> = {};
-  const obs: Record<string, ReturnType<typeof toDisplay>> = {};
-  for (const [k, v] of state.regs) regs[k] = toDisplay(v);
-  for (const [k, v] of state.mem) mem[k] = toDisplay(v);
-  for (const [k, v] of state.obs) obs[String(k)] = toDisplay(v);
-  const hasLeak = stateHasViolation(state);
-  return {
-    sections: [
-      { id: "regs", title: "Registers", type: "key-value", data: regs },
-      { id: "mem", title: "Memory", type: "key-value", data: mem },
-      { id: "obs", title: "Observations", type: "key-value", data: obs, alert: hasLeak },
-    ],
-  };
-}
+  const obsMem: Record<string, ReturnType<typeof toDisplay>> = {};
+  const obsCtrl: Record<string, ReturnType<typeof toDisplay>> = {};
+  for (const [k, v] of state.regs) {
+    const joined = join(v.ns, v.sp);
+    regs[k] = { ...toDisplay(joined), detail: { ns: v.ns, sp: v.sp, join: joined } };
+  }
+  for (const [k, v] of state.mem) {
+    const joined = join(v.ns, v.sp);
+    mem[k] = { ...toDisplay(joined), detail: { ns: v.ns, sp: v.sp, join: joined } };
+  }
+  for (const [k, v] of state.obsMem) obsMem[String(k)] = toDisplay(v);
+  for (const [k, v] of state.obsCtrl) obsCtrl[String(k)] = toDisplay(v);
 
-function buildReplayTrace(
-  graph: StaticGraph,
-  states: Map<string, AbsState>,
-  entryNodeId: string,
-  adj: Map<string, GraphEdge[]>,
-  nodeMap: Map<string, GraphNode>,
-): TraceStep[] {
-  const steps: TraceStep[] = [];
-  const visited = new Set<string>();
-  const queue: string[] = [entryNodeId];
-  let stepId = 0;
-
-  while (queue.length > 0) {
-    const nodeId = queue.shift()!;
-    if (visited.has(nodeId)) continue;
-    visited.add(nodeId);
-    const node = nodeMap.get(nodeId);
-    if (!node) continue;
-
-    const st = states.get(nodeId) ?? bottomState();
-    const hasLeak = stateHasViolation(st);
-    steps.push({
-      stepId: stepId++,
-      nodeId,
-      description: node.label ?? "",
-      executionMode: node.type === "spec" ? "Speculative" : "NS",
-      state: stateToSections(st),
-      isViolation: hasLeak,
-    });
-
-    const edges = adj.get(nodeId) ?? [];
-    for (const e of edges) {
-      if (!visited.has(e.target)) queue.push(e.target);
+  let hasMemViolation = false;
+  for (const v of state.obsMem.values()) {
+    if (v === "Leak" || v === "Top") {
+      hasMemViolation = true;
+      break;
     }
   }
 
-  return steps;
+  let hasCtrlViolation = false;
+  for (const v of state.obsCtrl.values()) {
+    if (v === "Leak" || v === "Top") {
+      hasCtrlViolation = true;
+      break;
+    }
+  }
+
+  return {
+    sections: [
+      { id: "regs", title: "Registers", type: "key-value" as const, data: regs },
+      { id: "mem", title: "Memory", type: "key-value" as const, data: mem },
+      {
+        id: "obsMem",
+        title: "Memory Observations",
+        type: "key-value" as const,
+        data: obsMem,
+        alert: hasMemViolation,
+      },
+      {
+        id: "obsCtrl",
+        title: "Control Observations",
+        type: "key-value" as const,
+        data: obsCtrl,
+        alert: hasCtrlViolation,
+      },
+    ],
+  };
 }
 
 export async function analyzeVCFG(
@@ -303,44 +415,119 @@ export async function analyzeVCFG(
     };
   }
   const iterationCap = opts.iterationCap ?? DEFAULT_CAP;
+  const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
   const nodeMap = new Map(graph.nodes.map((n) => [n.id, n] as const));
+  const usedRegs = collectRegisterNames(graph);
   const entryNode = getEntryNode(graph, opts.entryNodeId, nodeMap);
   const adj = getAdj(graph);
 
-  const states = new Map<string, AbsState>();
-  states.set(entryNode.id, initState(opts.policy, opts.entryRegs));
+  const states = new Map<string, Map<Mode, AbsState>>();
+  const ensureState = (nodeId: string, mode: Mode): AbsState => {
+    const m = states.get(nodeId) ?? new Map<Mode, AbsState>();
+    states.set(nodeId, m);
+    const st = m.get(mode) ?? bottomState();
+    m.set(mode, st);
+    return st;
+  };
 
-  const worklist: string[] = [entryNode.id];
+  const entryMode: Mode = entryNode.type === "spec" ? "Speculative" : "NS";
+  ensureState(entryNode.id, entryMode);
+  const seededInit = initState(opts.policy, opts.entryRegs);
+  seedRegs(seededInit, usedRegs);
+  states.get(entryNode.id)?.set(entryMode, seededInit);
+
+  const worklist: Array<{ nodeId: string; mode: Mode }> = [{ nodeId: entryNode.id, mode: entryMode }];
   let iterations = 0;
+  const stepLogs: TraceStep[] = [];
+  let stepId = 0;
+
+  const init = states.get(entryNode.id)?.get(entryMode) ?? bottomState();
+  stepLogs.push({
+    stepId,
+    nodeId: "", // entry はどのノードにもフォーカスさせない
+    description: "(entry)",
+    executionMode: entryMode,
+    state: stateToSections(init),
+    isViolation: stateHasViolation(init),
+  });
 
   while (worklist.length > 0) {
-    const nodeId = worklist.shift()!;
-    const node = nodeMap.get(nodeId)!;
-    const inState = states.get(nodeId)!;
+    const shifted = worklist.shift();
+    if (!shifted) break;
+    const { nodeId, mode } = shifted;
+    const node = nodeMap.get(nodeId);
+    if (!node) continue;
+    const inState = ensureState(nodeId, mode);
+    seedRegs(inState, usedRegs);
 
-    const mode: Mode = node.type === "spec" ? "Speculative" : "NS";
-    const outState = applyInstruction(node, inState, mode);
-    states.set(nodeId, outState);
+    let outState: AbsState;
+    try {
+      outState = applyInstruction(node, inState, mode);
+    } catch (err) {
+      return {
+        schemaVersion: ANALYSIS_SCHEMA_VERSION,
+        graph,
+        trace: { steps: [] },
+        result: "SNI_Violation",
+        error: { type: "AnalysisError", message: err instanceof Error ? err.message : String(err), detail: err },
+      };
+    }
+    states.get(nodeId)?.set(mode, outState);
+
+    stepId += 1;
+    if (stepId > maxSteps) {
+      return {
+        schemaVersion: ANALYSIS_SCHEMA_VERSION,
+        graph,
+        trace: { steps: stepLogs } as ExecutionTrace,
+        result: "SNI_Violation",
+        error: { type: "AnalysisError", message: "maxSteps exceeded", detail: { maxSteps } },
+      };
+    }
+    stepLogs.push({
+      stepId,
+      nodeId,
+      description: node.label ?? "",
+      executionMode: mode,
+      state: stateToSections(outState),
+      isViolation: stateHasViolation(outState),
+    });
 
     const edges = adj.get(nodeId) ?? [];
     for (const e of edges) {
       const tgtId = e.target;
-      const tgtState = states.get(tgtId) ?? bottomState();
+      const targetMode: Mode = e.type === "spec" ? "Speculative" : e.type === "rollback" ? "NS" : mode;
+      const tgtState = ensureState(tgtId, targetMode);
+      seedRegs(tgtState, usedRegs);
       const nextState = cloneState(outState);
+
+      // CTRL 分岐方向の観測 (フェーズ3): beqz ノードから出るエッジに対して taken/not-taken を記録
+      if ((node.instruction ?? node.label ?? "").trim().startsWith("beqz")) {
+        const dirVal: LatticeValue = e.label === "taken" ? "EqLow" : "EqHigh";
+        const dirObsId = `${node.pc}:dir`;
+        if (mode === "NS") {
+          updateCtrlObsNS(nextState, dirObsId, dirVal);
+        } else {
+          updateCtrlObsSpec(nextState, dirObsId, dirVal);
+        }
+      }
+
       const { changed } = e.type === "rollback"
         ? mergeState(
             tgtState,
             (() => {
               const rollbackOnly = bottomState();
-              for (const [k, v] of nextState.obs) rollbackOnly.obs.set(k, v);
+              for (const [k, v] of nextState.obsMem) rollbackOnly.obsMem.set(k, v);
+              for (const [k, v] of nextState.obsCtrl) rollbackOnly.obsCtrl.set(k, v);
               return rollbackOnly;
             })(),
-            { regs: false, mem: false, obs: true },
+            { regs: false, mem: false, obsMem: true, obsCtrl: true },
           )
         : mergeState(tgtState, nextState);
       if (changed) {
-        states.set(tgtId, tgtState);
-        worklist.push(tgtId);
+        ensureState(tgtId, targetMode);
+        states.get(tgtId)?.set(targetMode, tgtState);
+        worklist.push({ nodeId: tgtId, mode: targetMode });
       }
     }
 
@@ -356,14 +543,11 @@ export async function analyzeVCFG(
     }
   }
 
-  // 仕様に従い、到達順の再生トレースを生成
-  const steps = buildReplayTrace(graph, states, entryNode.id, adj, nodeMap);
-
-  const finalViolation = Array.from(states.values()).some(stateHasViolation);
+  const finalViolation = stepLogs.some((s) => s.isViolation);
   const result: AnalysisResult = {
     schemaVersion: ANALYSIS_SCHEMA_VERSION,
     graph,
-    trace: { steps } as ExecutionTrace,
+    trace: { steps: stepLogs } as ExecutionTrace,
     result: finalViolation ? "SNI_Violation" : "Secure",
   };
   return result;

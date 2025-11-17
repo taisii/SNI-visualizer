@@ -35,8 +35,8 @@ end: skip
     expect(program.labels.get("start")).toBe(0);
     expect(program.labels.get("end")).toBe(8);
 
-    const beqzInstr = program.instructions[4]!.instr;
-    if (beqzInstr.op !== "beqz") {
+    const beqzInstr = program.instructions[4]?.instr;
+    if (!beqzInstr || beqzInstr.op !== "beqz") {
       throw new Error("beqz not parsed");
     }
     expect(beqzInstr.cond).toBe("r1");
@@ -50,8 +50,8 @@ beqz x, later
 later: skip
     `);
 
-    const beqz = program.instructions[0]!.instr;
-    if (beqz.op !== "beqz") throw new Error("expected beqz");
+    const beqz = program.instructions[0]?.instr;
+    if (!beqz || beqz.op !== "beqz") throw new Error("expected beqz");
     expect(beqz.targetPc).toBe(1);
     expect(program.labels.get("later")).toBe(1);
   });
@@ -59,8 +59,8 @@ later: skip
   it("ignores line-end comments", () => {
     const program = parse("load r1, base // comment\n// full line comment\nskip");
     expect(program.instructions).toHaveLength(2);
-    expect(program.instructions[0]!.instr.op).toBe("load");
-    expect(program.instructions[1]!.instr.op).toBe("skip");
+    expect(program.instructions[0]?.instr.op).toBe("load");
+    expect(program.instructions[1]?.instr.op).toBe("skip");
   });
 
   it("accepts label-only lines and ties label to the next instruction", () => {
@@ -73,8 +73,8 @@ Loop:
 
     expect(program.labels.get("Loop")).toBe(0);
     expect(program.instructions).toHaveLength(3);
-    const beqz = program.instructions[2]!.instr;
-    if (beqz.op !== "beqz") throw new Error("expected beqz");
+    const beqz = program.instructions[2]?.instr;
+    if (!beqz || beqz.op !== "beqz") throw new Error("expected beqz");
     expect(beqz.targetPc).toBe(0);
   });
 
@@ -107,8 +107,8 @@ Loop:
   it("parses cmov instruction with reg operands", () => {
     const program = parse("x <- r1 ? r2");
 
-    const instr = program.instructions[0]!.instr;
-    if (instr.op !== "cmov") throw new Error("expected cmov");
+    const instr = program.instructions[0]?.instr;
+    if (!instr || instr.op !== "cmov") throw new Error("expected cmov");
 
     expect(instr.dest).toBe("x");
     expect(instr.cond).toEqual({ kind: "reg", name: "r1" });
@@ -118,8 +118,8 @@ Loop:
   it("respects operator precedence and associativity", () => {
     const program = parse("x <- 1 + 2 * (3 - 4) & 5");
 
-    const instr = program.instructions[0]!.instr;
-    if (instr.op !== "assign") throw new Error("expected assign");
+    const instr = program.instructions[0]?.instr;
+    if (!instr || instr.op !== "assign") throw new Error("expected assign");
 
     expect(instr.expr).toEqual({
       kind: "binop",
@@ -265,6 +265,10 @@ Loop:
     // rollback の target に n3 が含まれないこと
     const rollbackTargets = new Set(graph.edges.filter(e => e.type === "rollback").map(e => e.target));
     expect(rollbackTargets.has("n3")).toBe(false);
+
+    // 投機開始 PC が存在しない場合、NS→NS の rollback を出さない
+    const rollbackEdges = graph.edges.filter(e => e.type === "rollback");
+    expect(rollbackEdges).toHaveLength(0);
   });
 
   it("spec nodes remain unique per speculation context", () => {
@@ -280,5 +284,24 @@ L: skip
     expect(new Set(specIds).size).toBe(specIds.length);
     expect(specIds.some(id => id.endsWith("@spec0"))).toBe(true);
     expect(specIds.some(id => id.endsWith("@spec1"))).toBe(true);
+  });
+
+  it("rollback edges originate only from speculative nodes", () => {
+    const graph = buildVCFG(
+      `
+beqz x, L
+spbarr
+L: skip
+`,
+      3,
+    );
+
+    const nodeType = new Map(graph.nodes.map(n => [n.id, n.type]));
+    const rollbackEdges = graph.edges.filter(e => e.type === "rollback");
+
+    expect(rollbackEdges.length).toBeGreaterThan(0);
+    for (const edge of rollbackEdges) {
+      expect(nodeType.get(edge.source)).toBe("spec");
+    }
   });
 });

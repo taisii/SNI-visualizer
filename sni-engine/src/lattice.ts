@@ -14,8 +14,8 @@ const ORDER: LatticeValue[] = ["Bot", "EqLow", "EqHigh", "Diverge", "Leak", "Top
 // Join 表を仕様通り固定で持つ。計算負荷を避け、表引き一択にする。
 const JOIN_TABLE: Record<LatticeValue, Record<LatticeValue, LatticeValue>> = {
   Bot:     { Bot: "Bot",     EqLow: "EqLow", EqHigh: "EqHigh", Diverge: "Diverge", Leak: "Leak", Top: "Top" },
-  EqLow:   { Bot: "EqLow",   EqLow: "EqLow", EqHigh: "Top",    Diverge: "Diverge", Leak: "Leak", Top: "Top" },
-  EqHigh:  { Bot: "EqHigh",  EqLow: "Top",   EqHigh: "EqHigh", Diverge: "Top",     Leak: "Top",  Top: "Top" },
+  EqLow:   { Bot: "EqLow",   EqLow: "EqLow", EqHigh: "EqHigh", Diverge: "Diverge", Leak: "Leak", Top: "Top" },
+  EqHigh:  { Bot: "EqHigh",  EqLow: "EqHigh", EqHigh: "EqHigh", Diverge: "Top",     Leak: "Top",  Top: "Top" },
   Diverge: { Bot: "Diverge", EqLow: "Diverge", EqHigh: "Top",  Diverge: "Diverge", Leak: "Top",  Top: "Top" },
   Leak:    { Bot: "Leak",    EqLow: "Leak",  EqHigh: "Top",    Diverge: "Top",     Leak: "Leak", Top: "Top" },
   Top:     { Bot: "Top",     EqLow: "Top",   EqHigh: "Top",    Diverge: "Top",     Leak: "Top",  Top: "Top" },
@@ -41,7 +41,6 @@ export function toDisplay(value: LatticeValue): DisplayValue {
       return { label: "Diverge", style: "info", description: "Low だが NS と Spec で値が分岐" };
     case "Leak":
       return { label: "Leak", style: "danger", description: "投機のみで High が観測された可能性" };
-    case "Top":
     default:
       return { label: "Top", style: "danger", description: "解析不能または複数状態の混合" };
   }

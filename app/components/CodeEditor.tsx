@@ -1,11 +1,7 @@
-const DEFAULT_CODE = `// 分岐誤予測でシークレットが観測されるデモ
-start:
-  load tmp, secret
-  beqz tmp, exit
-  store tmp, out
-exit:
-  spbarr
-  skip`;
+const DEFAULT_CODE = `Loop:
+  load z, a
+  load a, c
+  beqz y, Loop`;
 
 type Props = {
   value: string;

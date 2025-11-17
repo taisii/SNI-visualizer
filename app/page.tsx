@@ -122,7 +122,7 @@ export default function Home() {
             </div>
           </div>
           <div className="flex-1">
-            <StateViewer state={activeStep?.state ?? null} />
+            <StateViewer state={activeStep?.state ?? null} graph={result?.graph ?? null} />
           </div>
         </section>
       </main>

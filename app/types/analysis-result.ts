@@ -75,8 +75,16 @@ export type StateSection = {
   alert?: boolean;
 };
 
+export type DisplayLattice = "Bot" | "EqLow" | "EqHigh" | "Diverge" | "Leak" | "Top";
+
 export type DisplayValue = {
   label: string;
   style: "neutral" | "safe" | "warning" | "danger" | "info";
   description?: string;
+  // 関係的値の詳細表示用（任意）
+  detail?: {
+    ns: DisplayLattice;
+    sp: DisplayLattice;
+    join: DisplayLattice;
+  };
 };

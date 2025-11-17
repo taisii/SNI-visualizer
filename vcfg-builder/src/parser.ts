@@ -1,12 +1,10 @@
-import {
-  type BinaryOp,
-  type Expr,
-  type Identifier,
-  type Instruction,
-  type LabelTable,
-  type LabeledInstr,
-  type Program,
-  type Register,
+import type {
+  BinaryOp,
+  Expr,
+  Instruction,
+  LabelTable,
+  LabeledInstr,
+  Program,
 } from "./types";
 
 export class ParseError extends Error {

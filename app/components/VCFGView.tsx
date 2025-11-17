@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { Background, Controls, Edge, FitViewOptions, Node, ReactFlow, useEdgesState, useNodesState } from "@xyflow/react";
+import { Background, Controls, type Edge, type FitViewOptions, type Node, ReactFlow, useEdgesState, useNodesState } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useEffect, useMemo } from "react";
 import type { StaticGraph } from "../types/analysis-result";
