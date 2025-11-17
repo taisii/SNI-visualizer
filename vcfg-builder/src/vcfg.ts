@@ -1,6 +1,6 @@
 import type { StaticGraph } from "../../app/types/analysis-result";
 import { parse, ParseError, tryResolveJump } from "./parser";
-import type { Expr, Identifier } from "./types";
+import type { Expr, Identifier } from "../../muasm-ast";
 
 export function buildVCFG(sourceCode: string, windowSize = 20): StaticGraph {
 	if (windowSize <= 0) {
@@ -59,6 +59,7 @@ export function buildVCFG(sourceCode: string, windowSize = 20): StaticGraph {
 			pc: item.pc,
 			label: `${item.pc}: ${item.instr.text}`,
 			instruction: item.instr.text,
+			instructionAst: item.instr,
 			type: "ns",
 			sourceLine: item.sourceLine,
 		});
@@ -161,6 +162,7 @@ export function buildVCFG(sourceCode: string, windowSize = 20): StaticGraph {
 			pc: currentItem.pc,
 			label: `${currentItem.pc}: ${currentItem.instr.text}`,
 			instruction: currentItem.instr.text,
+			instructionAst: currentItem.instr,
 			type: "spec",
 			sourceLine: currentItem.sourceLine,
 			specOrigin: fromNodeId,

@@ -24,7 +24,7 @@ VCFG（仮想制御フローグラフ）と抽象解釈を用いた新規 SNI（
 
 `MuASM 基盤` → `SNI 解析コア` → `Web アプリ`
 
-の順に流れる。VCFG の生成は担当 B、解析は担当 C の一方向依存とする。ブラウザ内には B/C を直列に呼び出す統合ファサード（Analysis Engine モジュール）を置き、Web アプリはこの `analyze()` だけを依存対象とする。
+の順に流れる。VCFG の生成は担当 B、解析は担当 C の一方向依存とする。ブラウザ内には B/C を直列に呼び出す統合ファサード（Analysis Engine モジュール）を置き、Web アプリはこの `analyze(sourceCode, options?)` だけを依存対象とする。
 
 ```mermaid
 graph TD
@@ -37,7 +37,7 @@ graph TD
             MuASMEngine[MuASM基盤 (担当B)]
             SNIEngine[SNI解析コア (担当C)]
 
-            WebApp -- "1. analyze() でコードを送信" --> MuASMEngine
+            WebApp -- "1. analyze(source, options?) でコードを送信" --> MuASMEngine
             MuASMEngine -- "VCFG (StaticGraph)" --> SNIEngine
 
             SNIEngine -- "2. Abstract Interpretation" --> SNIEngine
@@ -50,7 +50,8 @@ graph TD
 
 ## 3. 共通インターフェース定義 (AnalysisResult Schema)
 
-本プロジェクトにおける「共通言語」となる、解析エンジン（担当 C）から Web アプリ（担当 A）へ渡される JSON データ構造を以下に定義する。担当 B も VCFG 構造生成時にこのスキーマの一部（`StaticGraph`）を意識する必要がある。**本節と `app/types/analysis-result.ts` をスキーマのソース・オブ・トゥルースとし、他ドキュメントは参照に徹する。**
+本プロジェクトにおける「共通言語」となる、解析エンジン（担当 C）から Web アプリ（担当 A）へ渡される JSON データ構造を以下に定義する。担当 B も VCFG 構造生成時にこのスキーマの一部（`StaticGraph`）を意識する必要がある。\
+**スキーマの唯一のソース・オブ・トゥルースは `app/types/analysis-result.ts`。本節を含むドキュメントは概要レベルのリファレンスとし、差分が生じた場合は同ファイルの定義を正とする。**
 
 ### 3.1 データ構造概要（共通スキーマ定義）
 
@@ -61,6 +62,7 @@ interface AnalysisResult {
   schemaVersion: "1.0.0";            // スキーマ互換性管理用
   graph: StaticGraph;                // 静的な VCFG 構造
   trace: ExecutionTrace;             // 解析ステップごとの状態遷移
+  traceMode: "bfs" | "single-path";  // トレース生成モード（UI メタ情報）
   result: "Secure" | "SNI_Violation"; // 最終判定
   error?: {
     type: "ParseError" | "AnalysisError" | "InternalError";
@@ -155,7 +157,7 @@ interface DisplayValue {
   - 定義された `AnalysisResult` JSON を受け取り、VCFG や状態テーブルを描画する。
   - エディタ機能、再生コントロールの実装。
 - 依存関係: 解析エンジンの内部ロジックには依存せず、上記の JSON スキーマのみに依存する。
-- API 形式: `analyze(sourceCode): Promise<AnalysisResult>` の非同期インターフェースを推奨（メインスレッド直呼び出しを前提にしつつ、将来の WebWorker 移行に備えて非同期を維持）。
+- API 形式: `analyze(sourceCode, options?): Promise<AnalysisResult>` を推奨（メインスレッド直呼び出しを前提にしつつ、将来の WebWorker 移行に備えて非同期を維持）。`options` では `traceMode`/`policy`/`entryRegs`/`entryNodeId`/`iterationCap`/`maxSteps` を指定可能（詳細は `app/lib/analysis-client.ts`）。
 
 ### 4.2 担当 B: MuASM 基盤エンジン (MuASM Infrastructure)
 

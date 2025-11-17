@@ -163,6 +163,23 @@ describe("buildVCFG", () => {
 		expect(graph.edges).toEqual([{ source: "n0", target: "n1", type: "ns" }]);
 	});
 
+	it("embeds instructionAst on ns/spec nodes", () => {
+		const graph = buildVCFG(
+			`
+beqz x, L
+L: skip
+`,
+			2,
+		);
+
+		const n0 = graph.nodes.find((n) => n.id === "n0");
+		expect(n0?.instructionAst).toBeDefined();
+		expect(n0?.instructionAst?.op).toBe("beqz");
+
+		const specNode = graph.nodes.find((n) => n.type === "spec");
+		expect(specNode?.instructionAst).toBeDefined();
+	});
+
 	it("branch expands mispredict speculative paths", () => {
 		const graph = buildVCFG(
 			`

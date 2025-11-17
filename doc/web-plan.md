@@ -30,8 +30,8 @@
 
 ## フェーズ 2: 機能拡張
 1. **ポリシー入力 UI の追加**  
-   - 解析呼び出しは `analyze(source)` のみでポリシー未対応 (`app/lib/analysis-client.ts:23-33`)。  
-   - 方針: Low/High を指定できるフォーム（regs/mem）を左ペインに追加し、`analyze(source, { policy })` に拡張。  
+   - 解析呼び出しは既に `analyze(source, options?)` を受け付け、`policy` を渡せるが UI からは未配線 (`app/lib/analysis-client.ts:34-50`)。  
+   - 方針: Low/High を指定できるフォーム（regs/mem）を左ペインに追加し、`analyze(source, { policy })` を実際に呼び出す。  
    - DOD: ポリシー未入力で従来通り動作し、指定時にエンジンへ渡されていることがモックで確認できる。
 2. **ステップジャンプ（ノードクリック連携）**  
    - 現状 VCFG ノードクリックは未実装 (`app/components/VCFGView.tsx` は表示のみ)。  

@@ -1,3 +1,5 @@
+import type { Instruction as MuasmInstruction } from "../../muasm-ast";
+
 export const ANALYSIS_SCHEMA_VERSION = "1.0.0" as const;
 
 export type TraceMode = "bfs" | "single-path";
@@ -38,6 +40,8 @@ export type GraphNode = {
 	sourceLine?: number;
 	specOrigin?: string; // 投機開始元ノード ID（複製時に付与）
 	instruction?: string; // 任意: 元命令の生テキスト。デバッグ/ツールチップ用
+	// MuASM の構造化 AST。VCFG ビルダーが付与し、SNI エンジンが優先的に利用する。
+	instructionAst?: MuasmInstruction;
 	x?: number;
 	y?: number;
 };

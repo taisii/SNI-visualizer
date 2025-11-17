@@ -33,7 +33,9 @@ describe("analysis-client analyze", () => {
 
 		await analyze("source code");
 
-		expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, { traceMode: "single-path" });
+		expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
+			traceMode: "single-path",
+		});
 	});
 
 	it("traceMode とその他オプションを透過的に渡す", async () => {

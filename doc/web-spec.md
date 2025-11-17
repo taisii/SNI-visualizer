@@ -20,8 +20,15 @@
 
 ### 1.1 解析呼び出し
 
-UI からの単一ファサード `analyze(sourceCode: string): Promise<AnalysisResult>` を提供する。  
+UI からの単一ファサード `analyze(sourceCode: string, options?: AnalyzeOptions): Promise<AnalysisResult>` を提供する。  
 内部で VCFG ビルダーと SNI エンジンを順に呼ぶ。例外発生時は `AnalysisResult.error` を埋めて返し、UI 側は Toast で通知後、結果を破棄する。
+
+`AnalyzeOptions`（実装: `app/lib/analysis-client.ts` → `sni-engine/src/analysis.ts`）で受け付ける項目:
+- `traceMode`: `"single-path"`（UI デフォルト）または `"bfs"`  
+- `policy`: `{ regs?: Record<string,"Low"|"High">; mem?: Record<string,"Low"|"High"> }`
+- `entryRegs`: 解析開始時に EqLow で初期化するレジスタ名の配列
+- `entryNodeId`: 開始ノード ID（省略時は先頭ノード）
+- `iterationCap` / `maxSteps`: 不動点計算とトレース生成の打ち切り上限
 
 ### 1.2 AnalysisResult スキーマ（UI が前提する形）
 

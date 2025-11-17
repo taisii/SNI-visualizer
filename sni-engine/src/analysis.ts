@@ -20,6 +20,7 @@ import {
 	defaultRegRel,
 } from "./state";
 import { parseGraph } from "./graph";
+import type { Expr, Instruction } from "../../muasm-ast";
 
 type Mode = "NS" | "Speculative";
 
@@ -180,6 +181,127 @@ function setMem(state: AbsState, name: string, value: RelValue) {
 	state.mem.set(name, value);
 }
 
+function stringifyExpr(expr: Expr): string {
+	switch (expr.kind) {
+		case "reg":
+			return expr.name;
+		case "int":
+			return String(expr.value);
+		case "binop":
+			return `(${stringifyExpr(expr.left)}${expr.op}${stringifyExpr(expr.right)})`;
+		default:
+			return "";
+	}
+}
+
+function evalExpr(state: AbsState, expr: Expr): RelValue {
+	switch (expr.kind) {
+		case "reg":
+			return getReg(state, expr.name);
+		case "int":
+			return { ns: "EqLow", sp: "EqLow" };
+		case "binop":
+			return relJoin(evalExpr(state, expr.left), evalExpr(state, expr.right));
+		default:
+			return defaultRegRel();
+	}
+}
+
+function getMemByExpr(state: AbsState, expr: Expr): RelValue {
+	if (expr.kind === "reg") return getMem(state, expr.name);
+	return getMem(state, stringifyExpr(expr));
+}
+
+// 文字列命令を最小限の AST に変換するフォールバック。既存の文字列パスと同等の
+// 解析結果になるよう、演算子は意味を持たない加算として扱う。
+function toAstFromString(op: string, rest: string[]): Instruction | undefined {
+	switch (op) {
+		case "":
+		case "skip":
+			return { op: "skip", text: "skip" };
+		case "assign": {
+			const [dst, src] = rest;
+			if (!dst || !src) return undefined;
+			return {
+				op: "assign",
+				dest: dst,
+				expr: { kind: "reg", name: src },
+				text: `assign ${dst} ${src}`,
+			};
+		}
+		case "op": {
+			const [dst, a, b] = rest;
+			if (!dst || !a || !b) return undefined;
+			return {
+				op: "assign",
+				dest: dst,
+				expr: {
+					kind: "binop",
+					op: "+",
+					left: { kind: "reg", name: a },
+					right: { kind: "reg", name: b },
+				},
+				text: `op ${dst} ${a} ${b}`,
+			};
+		}
+		case "load": {
+			const [dst, addr] = rest;
+			if (!dst || !addr) return undefined;
+			return {
+				op: "load",
+				dest: dst,
+				addr: { kind: "reg", name: addr },
+				text: `load ${dst} ${addr}`,
+			};
+		}
+		case "store": {
+			const [src, addr] = rest;
+			if (!src || !addr) return undefined;
+			return {
+				op: "store",
+				src,
+				addr: { kind: "reg", name: addr },
+				text: `store ${src} ${addr}`,
+			};
+		}
+		case "cmov": {
+			const [dst, cond, src] = rest;
+			if (!dst || !cond || !src) return undefined;
+			return {
+				op: "cmov",
+				dest: dst,
+				cond: { kind: "reg", name: cond },
+				value: { kind: "reg", name: src },
+				text: `cmov ${dst} ${cond} ${src}`,
+			};
+		}
+		case "spbarr":
+			return { op: "spbarr", text: "spbarr" };
+		case "beqz": {
+			const [cond] = rest;
+			if (!cond) return undefined;
+			return {
+				op: "beqz",
+				cond,
+				target: cond,
+				targetPc: -1,
+				text: `beqz ${cond}`,
+			};
+		}
+		case "jmp": {
+			const [target] = rest;
+			if (!target) return undefined;
+			return {
+				op: "jmp",
+				target: { kind: "reg", name: target },
+				text: `jmp ${target}`,
+			};
+		}
+		default:
+			return undefined;
+	}
+}
+
 function applyInstruction(
 	node: GraphNode,
 	state: AbsState,
@@ -190,27 +312,26 @@ function applyInstruction(
 	const [opRaw, ...restRaw] = instrRaw.trim().split(/\s+/);
 	const op = normalizeOperand(opRaw);
 	const rest = restRaw.map(normalizeOperand);
+	const ast =
+		(node.instructionAst as Instruction | undefined) ??
+		toAstFromString(op, rest);
 
-	// 観測キー: load/store は "pc:addr"、それ以外は pc 文字列（制御用）
-	const memObsId = (() => {
-		if (op === "load") {
-			const [, addr] = rest;
-			return `${node.pc}:${addr ?? ""}`;
-		}
-		if (op === "store") {
-			const [, addr] = rest;
-			return `${node.pc}:${addr ?? ""}`;
-		}
-		return undefined;
-	})();
 	const ctrlObsId = String(node.pc);
+
+	if (!ast) {
+		throw new Error(`unsupported instruction '${op}' at pc=${node.pc}`);
+	}
+
+	const memObsId =
+		ast.op === "load" || ast.op === "store"
+			? `${node.pc}:${stringifyExpr(ast.addr)}`
+			: undefined;
 
 	const setValue = (kind: "reg" | "mem", name: string, value: RelValue) => {
 		if (mode === "NS") {
 			kind === "reg" ? setReg(next, name, value) : setMem(next, name, value);
 		} else {
 			const prev = kind === "reg" ? getReg(next, name) : getMem(next, name);
-			// NS 成分は維持し、SP 成分のみ更新を join で反映
 			const updated: RelValue = { ns: prev.ns, sp: join(prev.sp, value.sp) };
 			kind === "reg"
 				? setReg(next, name, updated)
@@ -227,34 +348,21 @@ function applyInstruction(
 		}
 	};
 
-	switch (op) {
-		case "":
+	switch (ast.op) {
 		case "skip":
 			break;
 		case "assign": {
-			const [dst, src] = rest;
-			const v = getReg(state, src);
-			setValue("reg", dst, v);
-			break;
-		}
-		case "op": {
-			// binary op dst a b
-			const [dst, a, b] = rest;
-			const ra = getReg(state, a);
-			const rb = getReg(state, b);
-			const v = relJoin(ra, rb);
-			setValue("reg", dst, v);
+			const v = evalExpr(state, ast.expr);
+			setValue("reg", ast.dest, v);
 			break;
 		}
 		case "load": {
-			const [dst, addr] = rest;
-			const lAddr = getReg(state, addr);
-			const lVal = getMem(state, addr);
+			const lAddr = evalExpr(state, ast.addr);
+			const lVal = getMemByExpr(state, ast.addr);
 			const v: RelValue = {
 				ns: join(lVal.ns, lAddr.ns),
 				sp: join(lVal.sp, lAddr.sp),
 			};
-			// 観測はアドレスのみ（フェーズ2）: NS/SP それぞれの成分で評価
 			const observed =
 				mode === "NS"
 					? lAddr.ns === "EqHigh" || lAddr.ns === "Leak" || lAddr.ns === "Top"
@@ -264,13 +372,12 @@ function applyInstruction(
 						? "EqHigh"
 						: "EqLow";
 			observeMem(observed);
-			setValue("reg", dst, v);
+			setValue("reg", ast.dest, v);
 			break;
 		}
 		case "store": {
-			const [src, addr] = rest;
-			const lAddr = getReg(state, addr);
-			const lVal = getReg(state, src);
+			const lAddr = evalExpr(state, ast.addr);
+			const lVal = getReg(state, ast.src);
 			const v: RelValue = {
 				ns: join(lVal.ns, lAddr.ns),
 				sp: join(lVal.sp, lAddr.sp),
@@ -284,23 +391,18 @@ function applyInstruction(
 						? "EqHigh"
 						: "EqLow";
 			observeMem(observed);
-			setValue("mem", addr, v);
+			setValue("mem", stringifyExpr(ast.addr), v);
 			break;
 		}
 		case "cmov": {
-			// cmov dst cond src
-			const [dst, cond, src] = rest;
-			const v = relJoin(getReg(state, cond), getReg(state, src));
-			setValue("reg", dst, v);
+			const v = relJoin(evalExpr(state, ast.cond), evalExpr(state, ast.value));
+			setValue("reg", ast.dest, v);
 			break;
 		}
 		case "spbarr":
-			// 投機ウィンドウ閉鎖はグラフ構造で表現されるため、ここでは状態変化なし
 			break;
 		case "beqz": {
-			// 制御フロー観測 (CTRLLEAK 用)。条件レジスタのレベルを観測する。
-			const [condReg] = rest;
-			const level = getReg(state, condReg);
+			const level = getReg(state, ast.cond);
 			const observed = mode === "NS" ? level.ns : level.sp;
 			if (mode === "NS") {
 				updateCtrlObsNS(next, ctrlObsId, observed);
@@ -310,7 +412,6 @@ function applyInstruction(
 			break;
 		}
 		case "jmp": {
-			// 現段階では制御フローを Low とみなす（将来、式のレベルに応じた扱いに拡張可）
 			const level: LatticeValue = "EqLow";
 			if (mode === "NS") {
 				updateCtrlObsNS(next, ctrlObsId, level);
@@ -320,7 +421,7 @@ function applyInstruction(
 			break;
 		}
 		default: {
-			throw new Error(`unsupported instruction '${op}' at pc=${node.pc}`);
+			throw new Error(`unsupported instruction '${ast.op}' at pc=${node.pc}`);
 		}
 	}
 

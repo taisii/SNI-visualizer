@@ -69,6 +69,7 @@ docs/                       # 既存 doc/ 配下を移動 or symlink（任意）
 5) **実行・ビルドパイプライン更新**
    - `package.json` の scripts を monorepo 仕様（例: `turbo` または単純な `pnpm -r`) に更新。
    - Next の `tsconfig.json` とルート `tsconfig.base.json` を分割し、`packages/*` を参照するように設定。
+   - ※本フェーズは将来的なビジョンとしての改善案であり、直近のスプリントでは実行しない。
 
 ## 4. リスクと回避策
 - **型移設時の循環参照**: `analysis-schema` は純 TS 型・JSON Schema のみに限定し、ロジックを持たせないことで循環を防ぐ。

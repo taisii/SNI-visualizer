@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { analyzeVCFG } from "../src/analysis";
 import type { StaticGraph } from "../../app/types/analysis-result";
+import { buildVCFG } from "../../vcfg-builder/src";
 
 const baseNode = (
 	id: string,
@@ -126,6 +127,35 @@ describe("analyzeVCFG", () => {
 			res.trace.steps[0].state.sections.find((s) => s.id === "regs")?.data ??
 			{};
 		expect(regs.x.label).toBe("EqLow");
+	});
+
+	it("uses instructionAst to evaluate expressions", async () => {
+		const graph: StaticGraph = {
+			nodes: [baseNode("n0", 0, "ns", "x <- b + 1")],
+			edges: [],
+		};
+		const firstNode = graph.nodes[0];
+		if (!firstNode) throw new Error("graph.nodes[0] is missing");
+		firstNode.instructionAst = {
+			op: "assign",
+			dest: "x",
+			expr: {
+				kind: "binop",
+				op: "+",
+				left: { kind: "reg", name: "b" },
+				right: { kind: "int", value: 1 },
+			},
+			text: "x <- b + 1",
+		};
+
+		const res = await analyzeVCFG(graph, {
+			policy: { regs: { b: "High" } },
+			entryRegs: ["x", "b"],
+		});
+		const regs =
+			res.trace.steps[1].state.sections.find((s) => s.id === "regs")?.data ??
+			{};
+		expect(regs.x.label).toBe("EqHigh");
 	});
 
 	it("store in speculative mode flags leak via observation", async () => {
@@ -375,6 +405,26 @@ describe("analyzeVCFG", () => {
 		expect(Object.keys(regs).sort()).toEqual(["a", "c", "y", "z"].sort());
 		expect(regs.a.label).toBe("EqLow");
 		expect(regs.y.label).toBe("EqLow");
+	});
+
+	it("parses MuASM commas/<- via AST and completes without unsupported instruction", async () => {
+		const code = `
+Loop:
+  beqz x, L3
+  load z, secret
+  jmp L11
+L3:
+  beqz w, L10
+  load temp, in
+  jmp L11
+L10:
+  secret <- temp
+L11:
+  beqz y, Loop
+`;
+		const graph = buildVCFG(code);
+		const res = await analyzeVCFG(graph, { iterationCap: 300, maxSteps: 300 });
+		expect(res.error).toBeUndefined();
 	});
 
 	it("loop program (load-load-branch) produces stable EqHigh observations", async () => {
