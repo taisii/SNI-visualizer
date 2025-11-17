@@ -73,6 +73,11 @@ export function VCFGView({ graph, activeNodeId }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  // graph 変更時にノードも同期（解析開始時に空のままになるのを防ぐ）
+  useEffect(() => {
+    setNodes(initialNodes);
+  }, [initialNodes, setNodes]);
+
   // activeNode 変更時に style のみ更新（position を維持）
   useEffect(() => {
     if (!graph) return;
