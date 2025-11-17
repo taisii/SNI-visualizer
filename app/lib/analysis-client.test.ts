@@ -1,0 +1,71 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+import type { StaticGraph } from "../types/analysis-result";
+import { analyze } from "./analysis-client";
+
+const buildVCFGMock = vi.hoisted(() => vi.fn());
+const analyzeVCFGMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/vcfg-builder/src", () => ({
+	buildVCFG: buildVCFGMock,
+}));
+
+vi.mock("@/sni-engine/src/analysis", () => ({
+	analyzeVCFG: analyzeVCFGMock,
+}));
+
+describe("analysis-client analyze", () => {
+	beforeEach(() => {
+		buildVCFGMock.mockReset();
+		analyzeVCFGMock.mockReset();
+	});
+
+	it("デフォルトで traceMode=single-path をエンジンに渡す", async () => {
+		const graph: StaticGraph = { nodes: [], edges: [] };
+		buildVCFGMock.mockReturnValue(graph);
+		analyzeVCFGMock.mockResolvedValue({
+			schemaVersion: "1.0.0",
+			graph,
+			trace: { steps: [] },
+			traceMode: "single-path",
+			result: "Secure",
+		});
+
+		await analyze("source code");
+
+		expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, { traceMode: "single-path" });
+	});
+
+	it("traceMode とその他オプションを透過的に渡す", async () => {
+		const graph: StaticGraph = { nodes: [], edges: [] };
+		buildVCFGMock.mockReturnValue(graph);
+		analyzeVCFGMock.mockResolvedValue({
+			schemaVersion: "1.0.0",
+			graph,
+			trace: { steps: [] },
+			traceMode: "bfs",
+			result: "Secure",
+		});
+
+		await analyze("source code", { traceMode: "bfs", maxSteps: 3 });
+
+		expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
+			traceMode: "bfs",
+			maxSteps: 3,
+		});
+	});
+
+	it("ParseError でも traceMode を結果に残す", async () => {
+		const err = new Error("parse failed");
+		err.name = "ParseError";
+		buildVCFGMock.mockImplementation(() => {
+			throw err;
+		});
+
+		const res = await analyze("broken code", { traceMode: "bfs" });
+
+		expect(analyzeVCFGMock).not.toHaveBeenCalled();
+		expect(res.traceMode).toBe("bfs");
+		expect(res.error?.type).toBe("ParseError");
+	});
+});

@@ -1,8 +1,11 @@
+import type { TraceMode } from "../types/analysis-result";
+
 type Props = {
 	canPrev: boolean;
 	canNext: boolean;
 	isLoading: boolean;
 	isAutoPlay: boolean;
+	traceMode: TraceMode;
 	currentStep: number;
 	maxStep: number;
 	onAnalyze: () => void;
@@ -10,6 +13,7 @@ type Props = {
 	onNext: () => void;
 	onReset: () => void;
 	onToggleAutoPlay: () => void;
+	onTraceModeChange: (mode: TraceMode) => void;
 };
 
 export function ControlPanel({
@@ -17,6 +21,7 @@ export function ControlPanel({
 	canNext,
 	isLoading,
 	isAutoPlay,
+	traceMode,
 	currentStep,
 	maxStep,
 	onAnalyze,
@@ -24,6 +29,7 @@ export function ControlPanel({
 	onNext,
 	onReset,
 	onToggleAutoPlay,
+	onTraceModeChange,
 }: Props) {
 	return (
 		<div className="flex flex-col gap-3 rounded border border-neutral-200 bg-neutral-50 p-3">
@@ -50,6 +56,20 @@ export function ControlPanel({
 				</div>
 			</div>
 			<div className="flex items-center gap-2">
+				<label className="text-xs text-neutral-700">
+					トレースモード:
+					<select
+						className="ml-2 rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
+						value={traceMode}
+						onChange={(e) =>
+							onTraceModeChange(e.target.value as "bfs" | "single-path")
+						}
+						disabled={isLoading}
+					>
+						<option value="single-path">1経路ずつ（デフォルト）</option>
+						<option value="bfs">到達順（BFS）</option>
+					</select>
+				</label>
 				<button
 					className="rounded border border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100"
 					onClick={onPrev}

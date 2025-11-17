@@ -10,17 +10,17 @@ import { StateViewer } from "./components/StateViewer";
 import { VCFGView } from "./components/VCFGView";
 import { analyze } from "./lib/analysis-client";
 import { deriveControlState } from "./lib/controls";
-import type { AnalysisResult } from "./types/analysis-result";
+import type { AnalysisResult, TraceMode } from "./types/analysis-result";
 
 const AUTO_PLAY_INTERVAL_MS = 800;
 
 export default function Home() {
-	// 現時点ではバックエンド未接続のモック解析。エンジン連携はこれから実装予定。
 	const [source, setSource] = useState<string>(createInitialSource);
 	const [result, setResult] = useState<AnalysisResult | null>(null);
 	const [currentStep, setCurrentStep] = useState(0);
 	const [isAutoPlay, setIsAutoPlay] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
+	const [traceMode, setTraceMode] = useState<TraceMode>("single-path");
 
 	const activeStep = useMemo(
 		() => result?.trace.steps.at(currentStep) ?? null,
@@ -52,7 +52,7 @@ export default function Home() {
 		setIsLoading(true);
 		setIsAutoPlay(false);
 		try {
-			const analysis = await analyze(source);
+			const analysis = await analyze(source, { traceMode });
 			if (analysis.error) {
 				throw new Error(analysis.error.message ?? "解析でエラーが発生しました");
 			}
@@ -104,20 +104,24 @@ export default function Home() {
 			<Toaster richColors position="bottom-right" />
 			<main className="grid flex-1 grid-cols-1 gap-4 p-6 lg:grid-cols-2">
 				<section className="flex flex-col gap-3">
+					<div className="sticky top-6 z-10">
+						<ControlPanel
+							canPrev={controlState.canPrev}
+							canNext={controlState.canNext}
+							isLoading={isLoading}
+							isAutoPlay={isAutoPlay}
+							currentStep={currentStep}
+							maxStep={controlState.maxStep}
+							onAnalyze={handleAnalyze}
+							onPrev={handlePrev}
+							onNext={handleNext}
+							onReset={handleReset}
+							onToggleAutoPlay={() => setIsAutoPlay((v) => !v)}
+							traceMode={traceMode}
+							onTraceModeChange={(mode) => setTraceMode(mode)}
+						/>
+					</div>
 					<CodeEditor value={source} onChange={(val) => setSource(val)} />
-					<ControlPanel
-						canPrev={controlState.canPrev}
-						canNext={controlState.canNext}
-						isLoading={isLoading}
-						isAutoPlay={isAutoPlay}
-						currentStep={currentStep}
-						maxStep={controlState.maxStep}
-						onAnalyze={handleAnalyze}
-						onPrev={handlePrev}
-						onNext={handleNext}
-						onReset={handleReset}
-						onToggleAutoPlay={() => setIsAutoPlay((v) => !v)}
-					/>
 				</section>
 
 				<section className="flex flex-col gap-3">

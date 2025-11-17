@@ -5,6 +5,7 @@ import type {
 	GraphNode,
 	StaticGraph,
 	TraceStep,
+	TraceMode,
 } from "../../app/types/analysis-result";
 import { ANALYSIS_SCHEMA_VERSION } from "../../app/types/analysis-result";
 import { join, type LatticeValue, toDisplay } from "./lattice";
@@ -28,10 +29,12 @@ export type AnalyzeOptions = {
 	entryRegs?: string[];
 	entryNodeId?: string;
 	maxSteps?: number;
+	traceMode?: TraceMode;
 };
 
 const DEFAULT_CAP = 10_000;
 const DEFAULT_MAX_STEPS = 500;
+const DEFAULT_TRACE_MODE: TraceMode = "bfs";
 const normalizeOperand = (token: string): string => token.replace(/,+$/g, "");
 
 const INSTR_KEYWORDS = new Set([
@@ -460,6 +463,7 @@ export async function analyzeVCFG(
 	rawGraph: StaticGraph,
 	opts: AnalyzeOptions = {},
 ): Promise<AnalysisResult> {
+	const traceMode = opts.traceMode ?? DEFAULT_TRACE_MODE;
 	let graph: StaticGraph;
 	try {
 		graph = parseGraph(rawGraph);
@@ -468,6 +472,7 @@ export async function analyzeVCFG(
 			schemaVersion: ANALYSIS_SCHEMA_VERSION,
 			graph: rawGraph,
 			trace: { steps: [] },
+			traceMode,
 			result: "SNI_Violation",
 			error: {
 				type: "ParseError",
@@ -501,6 +506,9 @@ export async function analyzeVCFG(
 	const worklist: Array<{ nodeId: string; mode: Mode }> = [
 		{ nodeId: entryNode.id, mode: entryMode },
 	];
+	const takeNext = (): { nodeId: string; mode: Mode } | undefined =>
+		traceMode === "single-path" ? worklist.pop() : worklist.shift();
+
 	let iterations = 0;
 	const stepLogs: TraceStep[] = [];
 	let stepId = 0;
@@ -516,7 +524,7 @@ export async function analyzeVCFG(
 	});
 
 	while (worklist.length > 0) {
-		const shifted = worklist.shift();
+		const shifted = takeNext();
 		if (!shifted) break;
 		const { nodeId, mode } = shifted;
 		const node = nodeMap.get(nodeId);
@@ -532,6 +540,7 @@ export async function analyzeVCFG(
 				schemaVersion: ANALYSIS_SCHEMA_VERSION,
 				graph,
 				trace: { steps: [] },
+				traceMode,
 				result: "SNI_Violation",
 				error: {
 					type: "AnalysisError",
@@ -548,6 +557,7 @@ export async function analyzeVCFG(
 				schemaVersion: ANALYSIS_SCHEMA_VERSION,
 				graph,
 				trace: { steps: stepLogs } as ExecutionTrace,
+				traceMode,
 				result: "SNI_Violation",
 				error: {
 					type: "AnalysisError",
@@ -613,6 +623,7 @@ export async function analyzeVCFG(
 				schemaVersion: ANALYSIS_SCHEMA_VERSION,
 				graph,
 				trace: { steps: [] },
+				traceMode,
 				result: "SNI_Violation",
 				error: {
 					type: "AnalysisError",
@@ -628,6 +639,7 @@ export async function analyzeVCFG(
 		schemaVersion: ANALYSIS_SCHEMA_VERSION,
 		graph,
 		trace: { steps: stepLogs } as ExecutionTrace,
+		traceMode,
 		result: finalViolation ? "SNI_Violation" : "Secure",
 	};
 	return result;

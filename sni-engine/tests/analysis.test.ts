@@ -314,6 +314,47 @@ describe("analyzeVCFG", () => {
 		expect(regsN0.z.label).toBe("EqHigh");
 	});
 
+	it("uses bfs trace order by default", async () => {
+		const graph: StaticGraph = {
+			nodes: [
+				baseNode("n0", 0, "ns", "assign a b"),
+				baseNode("n1", 1, "ns", "assign c a"),
+				baseNode("n2", 2, "ns", "assign d c"),
+			],
+			edges: [edge("n0", "n1", "ns"), edge("n0", "n2", "ns")],
+		};
+
+		const res = await analyzeVCFG(graph, {
+			entryRegs: ["a", "b", "c", "d"],
+			policy: { regs: { b: "High" } },
+		});
+		const order = res.trace.steps.map((s) => s.nodeId);
+
+		expect(res.traceMode).toBe("bfs");
+		expect(order).toEqual(["", "n0", "n1", "n2"]);
+	});
+
+	it("switches to single-path (LIFO) trace order when traceMode is set", async () => {
+		const graph: StaticGraph = {
+			nodes: [
+				baseNode("n0", 0, "ns", "assign a b"),
+				baseNode("n1", 1, "ns", "assign c a"),
+				baseNode("n2", 2, "ns", "assign d c"),
+			],
+			edges: [edge("n0", "n1", "ns"), edge("n0", "n2", "ns")],
+		};
+
+		const res = await analyzeVCFG(graph, {
+			traceMode: "single-path",
+			entryRegs: ["a", "b", "c", "d"],
+			policy: { regs: { b: "High" } },
+		});
+		const order = res.trace.steps.map((s) => s.nodeId);
+
+		expect(res.traceMode).toBe("single-path");
+		expect(order).toEqual(["", "n0", "n2", "n1"]);
+	});
+
 	it("seeds registers used in program at step0", async () => {
 		const graph: StaticGraph = {
 			nodes: [

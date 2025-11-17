@@ -1,5 +1,7 @@
 export const ANALYSIS_SCHEMA_VERSION = "1.0.0" as const;
 
+export type TraceMode = "bfs" | "single-path";
+
 export type AnalysisResult = {
 	/** 互換性管理のためのスキーマバージョン */
 	schemaVersion: typeof ANALYSIS_SCHEMA_VERSION;
@@ -7,6 +9,8 @@ export type AnalysisResult = {
 	graph: StaticGraph;
 	/** コマ送り表示用の実行トレース */
 	trace: ExecutionTrace;
+	/** トレースの生成モード（表示やデバッグ向けメタデータ） */
+	traceMode: TraceMode;
 	/** 最終判定 */
 	result: "Secure" | "SNI_Violation";
 	/** 解析エラー情報（UI は message をユーザー向けに表示） */
