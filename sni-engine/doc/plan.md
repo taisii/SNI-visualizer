@@ -52,7 +52,7 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
 
 ### フェーズ 2: 観測キー命名・UI 整理
 - `obsMem/obsCtrl` のキー命名規則をプレフィックス付きに統一し、UI 側での表示分類を明文化。
-- `app/types/analysis-result.ts` のキー表示方針と揃うことを確認。
+- `lib/analysis-schema/index.ts` のキー表示方針と揃うことを確認。
 - DoD: 既存テストがキー変更後もパスし、UI で観測種別が正しくラベルされる。
 
 ### フェーズ 3: 観測境界テストの充実
@@ -68,7 +68,7 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
 - フェーズ 1〜3 で追加する各テストが `vitest` でグリーン。CI にスイート追加。 
 - `spec.md` に: 新しい状態型、観測キー仕様、射影ルール、漏洩判定表を反映。 
 - 既存テストの期待値が変わる場合、理由をテスト名またはコメントに明記。 
-- `sni-engine/src` の型・ロジックと `app/types/analysis-result.ts` の表示仕様が不整合を起こさないことを PR で相互確認。 
+- `sni-engine/src` の型・ロジックと `lib/analysis-schema/index.ts` の表示仕様が不整合を起こさないことを PR で相互確認。 
 - 性能: 既存ベンチ（`iterationCap=10_000` 相当）でタイムアウトしないことを簡易実測し、結果を PR コメントに記録。
 
 ## 4. リスクとトレードオフ

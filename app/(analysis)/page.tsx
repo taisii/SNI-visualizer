@@ -2,15 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Toaster } from "../components/ui/sonner";
-import { CodeEditor, createInitialSource } from "./components/CodeEditor";
-import { ControlPanel } from "./components/ControlPanel";
-import { Header } from "./components/Header";
-import { StateViewer } from "./components/StateViewer";
-import { VCFGView } from "./components/VCFGView";
-import { analyze } from "./lib/analysis-client";
-import { deriveControlState } from "./lib/controls";
-import type { AnalysisResult, TraceMode } from "./types/analysis-result";
+import { Toaster } from "@/components/ui/sonner";
+import { CodeEditor, createInitialSource } from "./features/editor/CodeEditor";
+import { ControlPanel } from "./features/controls/ControlPanel";
+import { Header } from "./shared/Header";
+import { StateViewer } from "./features/visualization/StateViewer";
+import { VCFGView } from "./features/visualization/VCFGView";
+import { analyze } from "./features/analysis-runner/services/analyze";
+import { deriveControlState } from "./features/controls/control-state";
+import type { AnalysisResult, TraceMode } from "@/lib/analysis-schema";
 
 const AUTO_PLAY_INTERVAL_MS = 800;
 

@@ -1,4 +1,4 @@
-import type { TraceMode } from "../types/analysis-result";
+import type { TraceMode } from "@/lib/analysis-schema";
 
 type Props = {
 	canPrev: boolean;

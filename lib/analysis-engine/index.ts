@@ -5,7 +5,7 @@ import {
 	type AnalysisError,
 	type AnalysisResult,
 	type TraceMode,
-} from "../types/analysis-result";
+} from "@/lib/analysis-schema";
 
 function buildErrorResult(
 	type: AnalysisError["type"],

@@ -15,7 +15,7 @@ MuASM プログラムに対する投機的非干渉 (SNI) 検証アルゴリズ�
 - **データフロー**: `MuASM 基盤` → `SNI 解析コア` → `Web アプリ`。
 
 ## 共通インターフェース (AnalysisResult 抜粋)
-型定義の単一出典は `app/types/analysis-result.ts`。A/B/C すべてここを import する。
+型定義の単一出典は `lib/analysis-schema/index.ts`。A/B/C すべてここを import する。
 - `schemaVersion`: `"1.0.0"`
 - `graph: StaticGraph` — 投機パス用にノード複製を許容（複製時 `type: "spec"`）。未複製なら `type: "ns"`。
 - `trace: ExecutionTrace` — `steps[{stepId,nodeId,description,executionMode,state,isViolation}]`
@@ -38,13 +38,21 @@ MuASM プログラムに対する投機的非干渉 (SNI) 検証アルゴリズ�
 - ワークリストによる固定点計算 + `iterationCap = 10,000`。終了後に「Replay」方式で ExecutionTrace を生成。
 - 3 マップ \(R^\#, \Gamma^\#, \mathcal{O}^\#\) を追跡し、Spec エッジでは NS を保持したまま Spec 側のみ更新して差分（Leak/Diverge）を検出。
 
-## リポジトリ構造
-- `app/` — Next.js アプリ本体。
-- `doc/` — プロジェクト全体要件・Web UI 仕様（`project.md`, `webapp.md`）。
-- `sni-engine/` — SNI 解析コア実装と仕様（`doc/project.md`）。
-- `vcfg-builder/` — MuASM 基盤エンジン実装と仕様（`doc/project.md`）。
-- `public/` — 静的アセット。
-- `bun.lock` — bun 用ロックファイル（npm 併用可）。
+## リポジトリ構造（現行）
+```
+.
+├ app/                        # Next.js アプリ（分析 UI は (analysis)/ 配下にコロケート）
+├ lib/
+│ ├ analysis-schema/          # AnalysisResult/StaticGraph 型の単一正本
+│ └ analysis-engine/          # UI から呼ぶ薄いファサード (VCFG Builder → SNI Engine)
+├ sni-engine/                 # SNI 解析コア
+├ vcfg-builder/               # MuASM VCFG ビルダー
+├ muasm-ast/                  # MuASM AST 定義
+├ components/                 # 共通 UI コンポーネント
+├ Doc/                        # プロジェクト要件・Web仕様・計画ドキュメント
+├ public/                     # 静的アセット
+└ bun.lock / package.json     # 依存管理
+```
 
 ## セットアップ / 実行
 前提: Node.js 18+ 推奨（Next.js 16 互換）。bun を使う場合は `bun` コマンドでも可。

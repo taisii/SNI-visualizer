@@ -1,4 +1,4 @@
-import type { AnalysisResult } from "../types/analysis-result";
+import type { AnalysisResult } from "@/lib/analysis-schema";
 
 type Props = {
 	result: AnalysisResult["result"] | null;

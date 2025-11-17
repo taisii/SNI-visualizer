@@ -13,7 +13,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useEffect, useMemo } from "react";
-import type { StaticGraph } from "../types/analysis-result";
+import type { StaticGraph } from "@/lib/analysis-schema";
 
 type Props = {
 	graph: StaticGraph | null;

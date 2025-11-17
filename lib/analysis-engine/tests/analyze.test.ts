@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-import type { StaticGraph } from "../types/analysis-result";
-import { analyze } from "./analysis-client";
+import type { StaticGraph } from "@/lib/analysis-schema";
+import { analyze } from "../index";
 
 const buildVCFGMock = vi.hoisted(() => vi.fn());
 const analyzeVCFGMock = vi.hoisted(() => vi.fn());
@@ -14,7 +14,7 @@ vi.mock("@/sni-engine/src/analysis", () => ({
 	analyzeVCFG: analyzeVCFGMock,
 }));
 
-describe("analysis-client analyze", () => {
+describe("analysis-engine analyze", () => {
 	beforeEach(() => {
 		buildVCFGMock.mockReset();
 		analyzeVCFGMock.mockReset();

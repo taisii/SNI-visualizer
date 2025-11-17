@@ -6,8 +6,8 @@ import type {
 	StaticGraph,
 	TraceStep,
 	TraceMode,
-} from "../../app/types/analysis-result";
-import { ANALYSIS_SCHEMA_VERSION } from "../../app/types/analysis-result";
+} from "@/lib/analysis-schema";
+import { ANALYSIS_SCHEMA_VERSION } from "@/lib/analysis-schema";
 import { join, type LatticeValue, toDisplay } from "./lattice";
 import {
 	type AbsState,
@@ -20,7 +20,7 @@ import {
 	defaultRegRel,
 } from "./state";
 import { parseGraph } from "./graph";
-import type { Expr, Instruction } from "../../muasm-ast";
+import type { Expr, Instruction } from "@/muasm-ast";
 
 type Mode = "NS" | "Speculative";
 
@@ -421,7 +421,9 @@ function applyInstruction(
 			break;
 		}
 		default: {
-			throw new Error(`unsupported instruction '${ast.op}' at pc=${node.pc}`);
+			const op = ast.op;
+			const _exhaustive: never = ast;
+			throw new Error(`unsupported instruction '${op}' at pc=${node.pc}`);
 		}
 	}
 

@@ -1,4 +1,4 @@
-import type { DisplayValue } from "../../app/types/analysis-result";
+import type { DisplayValue } from "@/lib/analysis-schema";
 
 export type LatticeValue =
 	| "Bot"

@@ -2,7 +2,7 @@
 
 - 作成日: 2025-11-17  
 - 対象: Web UI 実装担当 / 研究用デモ利用者  
-- 根拠: `app/page.tsx`・`app/components/*.tsx`・`app/lib/analysis-client.ts`・`app/types/analysis-result.ts`
+- 根拠: `app/(analysis)/page.tsx`・`app/(analysis)/features/*`・`lib/analysis-engine/index.ts`・`lib/analysis-schema/index.ts`
 
 本ドキュメントは「いま動いている Web UI が何をしているか」を実装コードから逆算してまとめた現行仕様書である。  
 理論仕様や将来計画は含めず、UI が依存するデータ構造と画面挙動を記述する。
@@ -23,7 +23,7 @@
 UI からの単一ファサード `analyze(sourceCode: string, options?: AnalyzeOptions): Promise<AnalysisResult>` を提供する。  
 内部で VCFG ビルダーと SNI エンジンを順に呼ぶ。例外発生時は `AnalysisResult.error` を埋めて返し、UI 側は Toast で通知後、結果を破棄する。
 
-`AnalyzeOptions`（実装: `app/lib/analysis-client.ts` → `sni-engine/src/analysis.ts`）で受け付ける項目:
+`AnalyzeOptions`（実装: `lib/analysis-engine/index.ts` → `sni-engine/src/analysis.ts`）で受け付ける項目:
 - `traceMode`: `"single-path"`（UI デフォルト）または `"bfs"`  
 - `policy`: `{ regs?: Record<string,"Low"|"High">; mem?: Record<string,"Low"|"High"> }`
 - `entryRegs`: 解析開始時に EqLow で初期化するレジスタ名の配列
@@ -40,7 +40,7 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 - `traceMode` — `"bfs"`（到達順）または `"single-path"`（1 経路を連続して展開）。UI デフォルトは後者。  
 - `error?` — `type/message` を持つ。Toast で surfaced し、画面は未解析状態に戻す。
 
-スキーマの一次ソースは `app/types/analysis-result.ts` を参照し、UI コードは同型にのみ依存する。
+スキーマの一次ソースは `lib/analysis-schema/index.ts` を参照し、UI コードは同型にのみ依存する。
 
 ### 1.3 トレース生成とワークリスト
 
@@ -85,7 +85,7 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 +---------------------------+---------------------------+
 ```
 
-表示上の縦横比は `app/page.tsx` の `lg:grid-cols-2` に依存し、PC で左右2ペイン、モバイルで縦積みになる。
+表示上の縦横比は `app/(analysis)/page.tsx` の `lg:grid-cols-2` に依存し、PC で左右2ペイン、モバイルで縦積みになる。
 
 ### 2.3 ステート管理
 

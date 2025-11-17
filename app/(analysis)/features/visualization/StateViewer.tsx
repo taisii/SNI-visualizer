@@ -5,7 +5,7 @@ import type {
 	AbstractState,
 	StateSection,
 	StaticGraph,
-} from "../types/analysis-result";
+} from "@/lib/analysis-schema";
 import {
 	Accordion,
 	AccordionContent,

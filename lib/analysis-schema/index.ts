@@ -1,4 +1,4 @@
-import type { Instruction as MuasmInstruction } from "../../muasm-ast";
+import type { Instruction as MuasmInstruction } from "@/muasm-ast";
 
 export const ANALYSIS_SCHEMA_VERSION = "1.0.0" as const;
 

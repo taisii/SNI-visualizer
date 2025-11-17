@@ -9,10 +9,10 @@
 - **パラメータ**: `windowSize`（投機ウィンドウ長）デフォルト 20。0 以下は即時例外。参照: `vcfg-builder/src/vcfg.ts:5-8`。
 
 ## 2. 出力（StaticGraph）
-- **スキーマの正本**: `StaticGraph`/`AnalysisResult` の正式スキーマは `doc/project.md` §3 と `app/types/analysis-result.ts` をソース・オブ・トゥルースとする。本書は生成ポリシーと実装上の挙動のみを要約する。
+- **スキーマの正本**: `StaticGraph`/`AnalysisResult` の正式スキーマは `doc/project.md` §3 と `lib/analysis-schema/index.ts` をソース・オブ・トゥルースとする。本書は生成ポリシーと実装上の挙動のみを要約する。
 - **ノード生成ポリシー**: 各命令に ID `n{pc}` を付与し、フィールドはスキーマに沿って埋める（例: `pc`、`label`、`type`、`sourceLine`、投機時の `specOrigin`）。参照: `vcfg-builder/src/vcfg.ts:55-65,137-145`。
 - **エッジ生成ポリシー**: `type` は `ns` / `spec` / `rollback` を使用し、重複はセットで排除。参照: `vcfg-builder/src/vcfg.ts:14-28`。
-- **返却単位**: `buildVCFG` はグラフ構造のみを返す。`schemaVersion` 付与とエラーハンドリングは上位ファサード `analyze()`（`app/lib/analysis-client.ts`）で行う。
+- **返却単位**: `buildVCFG` はグラフ構造のみを返す。`schemaVersion` 付与とエラーハンドリングは上位ファサード `analyze()`（`lib/analysis-engine/index.ts`）で行う。
 
 ## 3. 処理フロー
 1. **パース**  
@@ -37,4 +37,4 @@
 ## 5. 既知の挙動・制限
 - `jmp` のターゲットが即値・ラベル以外（実行時値など）の場合は未対応でエラーになります。`vcfg-builder/src/vcfg.ts:38-44`。
 - 投機・ロールバックエッジにはラベル（例: mispredict/taken）を付けていません。UI 表示は `type` とノード ID のみで判別します。`vcfg-builder/src/vcfg.ts:147-172`。
-- 出力度はグラフ構造のみに限定され、解析結果（secure/violation 判定や実行トレース）は別サービスで生成します。`app/types/analysis-result.ts:10-33`。
+- 出力度はグラフ構造のみに限定され、解析結果（secure/violation 判定や実行トレース）は別サービスで生成します。`lib/analysis-schema/index.ts:10-33`。

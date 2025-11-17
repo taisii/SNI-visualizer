@@ -29,7 +29,7 @@
 
 ## C. エラー伝搬とユースケース整備（現状確認を反映）
 - **ユーザー向けエラーメッセージ整形（未着手）**  
-  `ParseError` の detail に行番号は入る。UI 側では `app/lib/analysis-client.ts:23-34` で例外を捕捉し、`AnalysisResult.error` にラップして返却するまで完了済み。  
+  `ParseError` の detail に行番号は入る。UI 側では `lib/analysis-engine/index.ts:40-50` で例外を捕捉し、`AnalysisResult.error` にラップして返却するまで完了済み。  
   → 追加タスクはメッセージ文面のテンプレ整備とローカライズのみ（機能欠落ではない）。
 
 - **ドキュメントと API 表面の同期（解決済み）**  

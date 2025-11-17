@@ -1,4 +1,4 @@
-import type { StaticGraph } from "../../app/types/analysis-result";
+import type { StaticGraph } from "@/lib/analysis-schema";
 
 export function parseGraph(input: StaticGraph): StaticGraph {
 	if (!input?.nodes?.length) {

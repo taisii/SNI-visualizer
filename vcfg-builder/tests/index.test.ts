@@ -1,7 +1,7 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
-import { buildVCFG, parse, ParseError, type Program } from "./index";
-import { tryResolveJump } from "./parser";
-import type { StaticGraph } from "../../app/types/analysis-result";
+import { buildVCFG, parse, ParseError, type Program } from "../src";
+import { tryResolveJump } from "../src/parser";
+import type { StaticGraph } from "@/lib/analysis-schema";
 
 describe("API surface/type shape", () => {
 	it("buildVCFG signature aligns with StaticGraph output", () => {

@@ -4,6 +4,7 @@
 		"includes": [
 			"app/**/*.ts",
 			"app/**/*.tsx",
+			"lib/**",
 			"components/**",
 			"sni-engine/**",
 			"vcfg-builder/**",

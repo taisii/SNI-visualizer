@@ -1,4 +1,4 @@
-import type { AnalysisResult } from "../types/analysis-result";
+import type { AnalysisResult } from "@/lib/analysis-schema";
 
 export type ControlState = {
 	canPrev: boolean;

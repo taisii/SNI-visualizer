@@ -1,6 +1,6 @@
-import type { StaticGraph } from "../../app/types/analysis-result";
+import type { StaticGraph } from "@/lib/analysis-schema";
 import { parse, ParseError, tryResolveJump } from "./parser";
-import type { Expr, Identifier } from "../../muasm-ast";
+import type { Expr, Identifier } from "@/muasm-ast";
 
 export function buildVCFG(sourceCode: string, windowSize = 20): StaticGraph {
 	if (windowSize <= 0) {

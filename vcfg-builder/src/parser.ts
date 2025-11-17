@@ -5,7 +5,7 @@ import type {
 	LabelTable,
 	LabeledInstr,
 	Program,
-} from "../../muasm-ast";
+} from "@/muasm-ast";
 
 export class ParseError extends Error {
 	detail?: unknown;
