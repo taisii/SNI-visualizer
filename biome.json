@@ -1,17 +1,17 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.5/schema.json",
-  "files": {
-    "includes": [
-      "app/**/*.ts",
-      "app/**/*.tsx",
-      "components/**",
-      "sni-engine/**",
-      "vcfg-builder/**",
-      "doc/**",
-      "*.ts",
-      "*.tsx",
-      "*.js",
-      "*.jsx"
-    ]
-  }
+	"$schema": "https://biomejs.dev/schemas/2.3.5/schema.json",
+	"files": {
+		"includes": [
+			"app/**/*.ts",
+			"app/**/*.tsx",
+			"components/**",
+			"sni-engine/**",
+			"vcfg-builder/**",
+			"doc/**",
+			"*.ts",
+			"*.tsx",
+			"*.js",
+			"*.jsx"
+		]
+	}
 }
