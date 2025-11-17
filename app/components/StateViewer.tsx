@@ -1,12 +1,8 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import type { AbstractState, StateSection, StaticGraph } from "../types/analysis-result";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 type Props = {
   state: AbstractState | null;
@@ -22,6 +18,20 @@ const badgeColors: Record<StateSection["data"][string]["style"], string> = {
 };
 
 export function StateViewer({ state, graph }: Props) {
+  const [openValuesBySection, setOpenValuesBySection] = useState<Record<string, string[]>>({});
+
+  const updateSectionOpenValues = useCallback(
+    (sectionId: string, updater: (values: string[]) => string[]) => {
+      setOpenValuesBySection((prev) => {
+        const current = prev[sectionId] ?? [];
+        const next = updater(current);
+        if (next === current) return prev;
+        return { ...prev, [sectionId]: next };
+      });
+    },
+    [],
+  );
+
   if (!state) {
     return (
       <div className="flex h-full items-center justify-center rounded border border-dashed border-neutral-200 bg-white text-sm text-neutral-500">
@@ -91,71 +101,115 @@ export function StateViewer({ state, graph }: Props) {
                   : "space-y-1"
               }`}
             >
-              <Accordion
-                type="multiple"
-                className={section.id === "regs" || section.id === "obsMem" || section.id === "obsCtrl" ? "contents" : "space-y-1"}
-              >
-                {Object.entries(section.data).map(([key, value]) => {
+              {(() => {
+                const entries = Object.entries(section.data).map(([key, value], position) => {
                   const displayKey =
                     section.id === "obsMem" || section.id === "obsCtrl"
                       ? formatObservationKey(section.id, key)
                       : key;
-                  const hasDetail = Boolean(value.detail);
-                  const itemValue = `${section.id}-${key}`;
 
-                  const commonBox = (
-                    <div
-                      key={key}
-                      className="flex items-center gap-2 rounded-lg bg-white px-2 py-1"
-                    >
-                      <span className="font-mono text-[11px] text-neutral-700">{displayKey}</span>
-                      <span className="flex-1" />
-                      <span
-                        className={`min-w-[56px] rounded px-2 py-0.5 text-center text-[11px] font-semibold ${badgeColors[value.style]}`}
-                      >
-                        {value.label}
-                      </span>
-                    </div>
-                  );
+                  return {
+                    key,
+                    value,
+                    displayKey,
+                    hasDetail: Boolean(value.detail),
+                    itemValue: `${section.id}-${key}`,
+                    position,
+                  };
+                });
 
-                  if (!hasDetail) return commonBox;
+                const detailByPosition = new Map(
+                  entries.filter((e) => e.hasDetail).map((e) => [e.position, e]),
+                );
 
-                  return (
-                    <AccordionItem
-                      key={key}
-                      value={itemValue}
-                      className="overflow-hidden rounded-lg border border-neutral-200 bg-white"
-                    >
-                      <AccordionTrigger className="px-2 py-1 hover:no-underline">
-                        <span className="font-mono text-[11px] text-neutral-700">{displayKey}</span>
-                        <span className="flex-1" />
-                        <span
-                          className={`min-w-[56px] rounded px-2 py-0.5 text-center text-[11px] font-semibold ${badgeColors[value.style]}`}
+                const pairMap = new Map<string, string | null>();
+                for (const entry of entries) {
+                  if (!entry.hasDetail) continue;
+                  const partnerPos = entry.position % 2 === 0 ? entry.position + 1 : entry.position - 1;
+                  const partner = detailByPosition.get(partnerPos);
+                  pairMap.set(entry.itemValue, partner?.itemValue ?? null);
+                }
+
+                const openValues = openValuesBySection[section.id] ?? [];
+
+                const handleValueChange = (nextValues: string[]) => {
+                  const opened = nextValues.find((v) => !openValues.includes(v));
+                  const closed = openValues.find((v) => !nextValues.includes(v));
+
+                  let adjusted = nextValues;
+
+                  if (opened) {
+                    const pair = pairMap.get(opened);
+                    if (pair && !adjusted.includes(pair)) {
+                      adjusted = [...adjusted, pair];
+                    }
+                  } else if (closed) {
+                    const pair = pairMap.get(closed);
+                    if (pair) {
+                      adjusted = adjusted.filter((v) => v !== pair);
+                    }
+                  }
+
+                  updateSectionOpenValues(section.id, () => adjusted);
+                };
+
+                return (
+                  <Accordion
+                    type="multiple"
+                    className={
+                      section.id === "regs" || section.id === "obsMem" || section.id === "obsCtrl"
+                        ? "contents"
+                        : "space-y-1"
+                    }
+                    value={openValues}
+                    onValueChange={handleValueChange}
+                  >
+                    {entries.map(({ key, value, displayKey, hasDetail, itemValue }) => {
+                      const badgeClass = `min-w-[56px] rounded px-2 py-0.5 text-center text-[11px] font-semibold ${badgeColors[value.style]}`;
+
+                      if (!hasDetail) {
+                        return (
+                          <div key={key} className="flex items-center gap-2 rounded-lg bg-white px-2 py-1">
+                            <span className="font-mono text-[11px] text-neutral-700">{displayKey}</span>
+                            <span className="flex-1" />
+                            <span className={badgeClass}>{value.label}</span>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <AccordionItem
+                          key={key}
+                          value={itemValue}
+                          className="overflow-hidden rounded-lg border border-neutral-200 bg-white"
                         >
-                          {value.label}
-                        </span>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-2 pb-2">
-                        <div className="grid grid-cols-3 gap-2 text-[10px] text-neutral-700">
-                          {(["ns", "sp", "join"] as const).map((k) => {
-                            const val = value.detail?.[k];
-                            return (
-                              <div key={k} className="flex items-center justify-between gap-1 rounded bg-neutral-50 px-2 py-1">
-                                <span className="font-mono text-[10px] text-neutral-600">{k}:</span>
-                                <span
-                                  className={`min-w-[44px] rounded px-2 py-0.5 text-center text-[10px] font-semibold ${badgeColors[value.style]}`}
-                                >
-                                  {val}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
+                          <AccordionTrigger className="px-2 py-1 hover:no-underline">
+                            <span className="font-mono text-[11px] text-neutral-700">{displayKey}</span>
+                            <span className="flex-1" />
+                            <span className={badgeClass}>{value.label}</span>
+                          </AccordionTrigger>
+                          <AccordionContent className="px-2 pb-2">
+                            <div className="grid grid-cols-3 gap-2 text-[10px] text-neutral-700">
+                              {(["ns", "sp", "join"] as const).map((k) => {
+                                const val = value.detail?.[k];
+                                return (
+                                  <div
+                                    key={k}
+                                    className="flex items-center justify-between gap-1 rounded bg-neutral-50 px-2 py-1"
+                                  >
+                                    <span className="font-mono text-[10px] text-neutral-600">{k}:</span>
+                                    <span className={badgeClass.replace("text-[11px]", "text-[10px]")}>{val}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      );
+                    })}
+                  </Accordion>
+                );
+              })()}
             </div>
           </div>
         ))}
