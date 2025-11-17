@@ -7,7 +7,7 @@
 
 ## 1. システム概要
 
-本システムは、MuASM プログラムを入力とし、提案手法である「VCFG（仮想制御フローグラフ）」と「抽象解釈」を用いた SNI（投機的非干渉）検証プロセスの動作を、ブラウザ上で視覚的に確認するための Web アプリケーションである。
+本システムは、MuASM プログラムを入力とし、提案手法である「VCFG（仮想制御フローグラフ）」と「抽象解釈」を用いた SNI（投機的非干渉）検証プロセスの動作を、ブラウザ上で視覚的に確認するための Web アプリケーションである。ユーザは UI 上で各レジスタ/メモリの機密区分ポリシー（Low/High）を指定し、そのポリシーを解析エンジンへ渡せる。
 
 ### 1.1 主要な要件
 
@@ -33,8 +33,19 @@ interface AnalysisEngine {
    * ソースコードを入力とし、解析結果全体を返す（非同期）。
    * 解析結果には、静的なグラフ構造と、動的な実行トレースが含まれる。
    */
-  analyze(sourceCode: string): Promise<AnalysisResult>;
+  analyze(sourceCode: string, options?: { policy?: Policy }): Promise<AnalysisResult>;
 }
+
+type SecurityLevel = "Low" | "High";
+type Policy = {
+  regs?: Record<string, SecurityLevel>;
+  mem?: Record<string, SecurityLevel>;
+};
+
+// UI 側の責務
+// - ユーザ入力フォームで policy(JSON) を作成
+// - エンジン呼び出し時に options.policy として渡す
+// - 未入力の場合は options.policy を省略し、エンジン既定の初期化規則に委ねる
 ```
 
 ### 2.2 データ構造定義 (AnalysisResult)
