@@ -1,11 +1,7 @@
-import type {
-  BinaryOp,
-  Expr,
-  Instruction,
-  LabelTable,
-  LabeledInstr,
-  Program,
-} from "@/muasm-ast";
+import type { LabelTable, LabeledInstr, Program } from "../types/program";
+import type { BinaryOp, Expr } from "../types/expr";
+import type { Instruction } from "../types/instruction";
+import type { JumpResolution } from "../types/jump";
 
 export class ParseError extends Error {
   detail?: unknown;
@@ -66,6 +62,10 @@ export function parse(code: string): Program {
       }
       item.instr.targetPc = targetPc;
     }
+
+    if (item.instr.op === "jmp") {
+      item.instr.resolution = resolveJump(item.instr.target, labels);
+    }
   }
 
   return { instructions, labels };
@@ -77,11 +77,18 @@ export function tryResolveJump(
   expr: Expr,
   labels: LabelTable,
 ): number | undefined {
-  if (expr.kind === "int") return expr.value;
+  const res = resolveJump(expr, labels);
+  return res.kind === "pc" ? res.pc : undefined;
+}
+
+export function resolveJump(expr: Expr, labels: LabelTable): JumpResolution {
+  if (expr.kind === "int") return { kind: "pc", pc: expr.value };
   if (expr.kind === "reg") {
-    return labels.get(expr.name);
+    const pc = labels.get(expr.name);
+    if (pc !== undefined) return { kind: "pc", pc, label: expr.name };
+    return { kind: "label", label: expr.name };
   }
-  return undefined;
+  return { kind: "dynamic" };
 }
 
 // --- 内部実装 ---
@@ -122,55 +129,76 @@ function parseInstruction(text: string, sourceLine: number): Instruction {
   }
   const cursor: TokenCursor = { tokens, index: 0 };
 
-  const head = expectIdentifier(cursor, sourceLine);
+  const headToken = cursor.tokens[cursor.index];
+  if (!headToken || headToken.kind !== "identifier") {
+    throw new ParseError("命令または代入の先頭が識別子である必要があります", {
+      sourceLine,
+    });
+  }
+  const head = headToken.value;
+  cursor.index += 1;
 
-  switch (head) {
-    case "skip":
-      ensureEof(cursor, sourceLine);
-      return { op: "skip", text };
-    case "spbarr":
-      ensureEof(cursor, sourceLine);
-      return { op: "spbarr", text };
-    case "load": {
-      const dest = expectIdentifier(cursor, sourceLine);
-      expectSymbol(cursor, ",", sourceLine);
-      const addr = parseExpr(cursor, sourceLine);
-      ensureEof(cursor, sourceLine);
-      return { op: "load", dest, addr, text };
-    }
-    case "store": {
-      const src = expectIdentifier(cursor, sourceLine);
-      expectSymbol(cursor, ",", sourceLine);
-      const addr = parseExpr(cursor, sourceLine);
-      ensureEof(cursor, sourceLine);
-      return { op: "store", src, addr, text };
-    }
-    case "beqz": {
-      const cond = expectIdentifier(cursor, sourceLine);
-      expectSymbol(cursor, ",", sourceLine);
-      const target = expectIdentifier(cursor, sourceLine);
-      ensureEof(cursor, sourceLine);
-      return { op: "beqz", cond, target, targetPc: -1, text };
-    }
-    case "jmp": {
-      const target = parseExpr(cursor, sourceLine);
-      ensureEof(cursor, sourceLine);
-      return { op: "jmp", target, text };
-    }
-    default: {
-      // 代入/条件付き代入の形を処理
-      const dest = head;
-      expectSymbol(cursor, "<-", sourceLine);
-      const exprOrCond = parseExpr(cursor, sourceLine);
-      if (maybeSymbol(cursor, "?")) {
-        const value = parseExpr(cursor, sourceLine);
+  const keywordOps = new Set([
+    "skip",
+    "spbarr",
+    "load",
+    "store",
+    "beqz",
+    "jmp",
+  ]);
+
+  if (keywordOps.has(head)) {
+    const op = head;
+    const textTrimmed = text.trim();
+    switch (op) {
+      case "skip":
         ensureEof(cursor, sourceLine);
-        return { op: "cmov", dest, cond: exprOrCond, value, text };
+        return { op: "skip", text: textTrimmed };
+      case "spbarr":
+        ensureEof(cursor, sourceLine);
+        return { op: "spbarr", text: textTrimmed };
+      case "load": {
+        const dest = expectIdentifier(cursor, sourceLine);
+        expectSymbol(cursor, ",", sourceLine);
+        const addr = parseExpr(cursor, sourceLine);
+        ensureEof(cursor, sourceLine);
+        return { op: "load", dest, addr, text: textTrimmed };
       }
-      ensureEof(cursor, sourceLine);
-      return { op: "assign", dest, expr: exprOrCond, text };
+      case "store": {
+        const src = expectIdentifier(cursor, sourceLine);
+        expectSymbol(cursor, ",", sourceLine);
+        const addr = parseExpr(cursor, sourceLine);
+        ensureEof(cursor, sourceLine);
+        return { op: "store", src, addr, text: textTrimmed };
+      }
+      case "beqz": {
+        const cond = expectIdentifier(cursor, sourceLine);
+        expectSymbol(cursor, ",", sourceLine);
+        const target = expectIdentifier(cursor, sourceLine);
+        ensureEof(cursor, sourceLine);
+        return { op: "beqz", cond, target, targetPc: -1, text: textTrimmed };
+      }
+      case "jmp": {
+        const target = parseExpr(cursor, sourceLine);
+        ensureEof(cursor, sourceLine);
+        return { op: "jmp", target, text: textTrimmed };
+      }
+      default:
+        // fallthrough to assignment/cmov handling
+        break;
     }
   }
+
+  const dest = head;
+  expectSymbol(cursor, "<-", sourceLine);
+  const exprOrCond = parseExpr(cursor, sourceLine);
+  if (maybeSymbol(cursor, "?")) {
+    const value = parseExpr(cursor, sourceLine);
+    ensureEof(cursor, sourceLine);
+    return { op: "cmov", dest, cond: exprOrCond, value, text };
+  }
+  ensureEof(cursor, sourceLine);
+  return { op: "assign", dest, expr: exprOrCond, text };
 }
 
 function tokenize(text: string, sourceLine: number): Token[] {
@@ -265,61 +293,46 @@ function maybeSymbol(cursor: TokenCursor, value: string): boolean {
   return false;
 }
 
-function ensureEof(cursor: TokenCursor, sourceLine: number): void {
-  if (cursor.index < cursor.tokens.length) {
-    const token = cursor.tokens[cursor.index];
-    throw new ParseError(`予期しないトークン '${token.value}'`, {
-      sourceLine,
-      at: cursor.index,
-    });
-  }
-}
-
 function parseExpr(cursor: TokenCursor, sourceLine: number): Expr {
-  return parseAddSub(cursor, sourceLine);
+  return parseBinOp(cursor, sourceLine, 0);
 }
 
-function parseAddSub(cursor: TokenCursor, sourceLine: number): Expr {
-  let node = parseMulAnd(cursor, sourceLine);
-  // left-associative
+const PRECEDENCE: Record<BinaryOp, number> = {
+  "&": 1,
+  "+": 2,
+  "-": 2,
+  "*": 3,
+};
+
+const BINARY_OPS = new Set<BinaryOp>(["&", "+", "-", "*"]);
+
+function parseBinOp(
+  cursor: TokenCursor,
+  sourceLine: number,
+  minPrec: number,
+): Expr {
+  let left = parsePrimary(cursor, sourceLine);
+
   while (true) {
     const token = cursor.tokens[cursor.index];
-    if (
-      token?.kind === "symbol" &&
-      (token.value === "+" || token.value === "-")
-    ) {
-      cursor.index += 1;
-      const right = parseMulAnd(cursor, sourceLine);
-      node = { kind: "binop", op: token.value as BinaryOp, left: node, right };
-      continue;
-    }
-    break;
+    if (!token || token.kind !== "symbol") break;
+    const op = token.value as BinaryOp;
+    if (!BINARY_OPS.has(op)) break;
+    const prec = PRECEDENCE[op];
+    if (prec < minPrec) break;
+
+    cursor.index += 1;
+    const right = parseBinOp(cursor, sourceLine, prec + 1);
+    left = { kind: "binop", op, left, right };
   }
-  return node;
+
+  return left;
 }
 
-function parseMulAnd(cursor: TokenCursor, sourceLine: number): Expr {
-  let node = parseFactor(cursor, sourceLine);
-  while (true) {
-    const token = cursor.tokens[cursor.index];
-    if (
-      token?.kind === "symbol" &&
-      (token.value === "*" || token.value === "&")
-    ) {
-      cursor.index += 1;
-      const right = parseFactor(cursor, sourceLine);
-      node = { kind: "binop", op: token.value as BinaryOp, left: node, right };
-      continue;
-    }
-    break;
-  }
-  return node;
-}
-
-function parseFactor(cursor: TokenCursor, sourceLine: number): Expr {
+function parsePrimary(cursor: TokenCursor, sourceLine: number): Expr {
   const token = cursor.tokens[cursor.index];
   if (!token) {
-    throw new ParseError("式が不完全です", { sourceLine, at: cursor.index });
+    throw new ParseError("式が必要です", { sourceLine });
   }
 
   if (token.kind === "identifier") {
@@ -329,19 +342,24 @@ function parseFactor(cursor: TokenCursor, sourceLine: number): Expr {
 
   if (token.kind === "int") {
     cursor.index += 1;
-    return { kind: "int", value: Number.parseInt(token.value, 10) };
+    return { kind: "int", value: Number(token.value) };
   }
 
   if (token.kind === "symbol" && token.value === "(") {
     cursor.index += 1;
-    const inner = parseExpr(cursor, sourceLine);
+    const expr = parseExpr(cursor, sourceLine);
     expectSymbol(cursor, ")", sourceLine);
-    return inner;
+    return expr;
   }
 
-  throw new ParseError("式の構文が不正です", {
-    sourceLine,
-    at: cursor.index,
-    token,
-  });
+  throw new ParseError("無効な式です", { sourceLine, at: cursor.index });
+}
+
+function ensureEof(cursor: TokenCursor, sourceLine: number): void {
+  if (cursor.index !== cursor.tokens.length) {
+    throw new ParseError("不要なトークンがあります", {
+      sourceLine,
+      at: cursor.index,
+    });
+  }
 }

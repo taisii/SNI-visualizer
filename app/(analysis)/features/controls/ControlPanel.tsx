@@ -6,6 +6,7 @@ type Props = {
   isLoading: boolean;
   isAutoPlay: boolean;
   traceMode: TraceMode;
+  vcfgMode: "expanded" | "meta";
   currentStep: number;
   maxStep: number;
   onAnalyze: () => void;
@@ -14,6 +15,7 @@ type Props = {
   onReset: () => void;
   onToggleAutoPlay: () => void;
   onTraceModeChange: (mode: TraceMode) => void;
+  onVCFGModeChange: (mode: "expanded" | "meta") => void;
 };
 
 export function ControlPanel({
@@ -22,6 +24,7 @@ export function ControlPanel({
   isLoading,
   isAutoPlay,
   traceMode,
+  vcfgMode,
   currentStep,
   maxStep,
   onAnalyze,
@@ -30,6 +33,7 @@ export function ControlPanel({
   onReset,
   onToggleAutoPlay,
   onTraceModeChange,
+  onVCFGModeChange,
 }: Props) {
   return (
     <div className="flex flex-col gap-3 rounded border border-neutral-200 bg-neutral-50 p-3">
@@ -68,6 +72,20 @@ export function ControlPanel({
           >
             <option value="single-path">1経路ずつ（デフォルト）</option>
             <option value="bfs">到達順（BFS）</option>
+          </select>
+        </label>
+        <label className="text-xs text-neutral-700">
+          VCFGモード:
+          <select
+            className="ml-2 rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
+            value={vcfgMode}
+            onChange={(e) =>
+              onVCFGModeChange(e.target.value as "expanded" | "meta")
+            }
+            disabled={isLoading}
+          >
+            <option value="expanded">展開版（従来）</option>
+            <option value="meta">メタ版（spec-begin/end）</option>
           </select>
         </label>
         <button

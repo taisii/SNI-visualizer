@@ -92,6 +92,12 @@ function getEntryNode(
   return graph.nodes[0];
 }
 
+function assertNever(instr: never, node: GraphNode): never {
+  throw new Error(
+    `unsupported instruction '${(instr as Instruction).op}' at pc=${node.pc}`,
+  );
+}
+
 function getAdj(graph: StaticGraph): Map<string, GraphEdge[]> {
   const adj = new Map<string, GraphEdge[]>();
   for (const e of graph.edges) {
@@ -421,9 +427,7 @@ function applyInstruction(
       break;
     }
     default: {
-      const op = ast.op;
-      const _exhaustive: never = ast;
-      throw new Error(`unsupported instruction '${op}' at pc=${node.pc}`);
+      assertNever(ast, node);
     }
   }
 
@@ -686,17 +690,6 @@ export async function analyzeVCFG(
       const tgtState = ensureState(tgtId, targetMode);
       seedRegs(tgtState, usedRegs);
       const nextState = cloneState(outState);
-
-      // CTRL 分岐方向の観測 (フェーズ3): beqz ノードから出るエッジに対して taken/not-taken を記録
-      if ((node.instruction ?? node.label ?? "").trim().startsWith("beqz")) {
-        const dirVal: LatticeValue = e.label === "taken" ? "EqLow" : "EqHigh";
-        const dirObsId = `${node.pc}:dir`;
-        if (mode === "NS") {
-          updateCtrlObsNS(nextState, dirObsId, dirVal);
-        } else {
-          updateCtrlObsSpec(nextState, dirObsId, dirVal);
-        }
-      }
 
       const { changed } =
         e.type === "rollback"

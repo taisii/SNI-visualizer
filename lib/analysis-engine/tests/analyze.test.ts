@@ -6,11 +6,11 @@ import { analyze } from "../index";
 const buildVCFGMock = vi.hoisted(() => vi.fn());
 const analyzeVCFGMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/vcfg-builder/src", () => ({
+vi.mock("@/vcfg-builder", () => ({
   buildVCFG: buildVCFGMock,
 }));
 
-vi.mock("@/sni-engine/src/analysis", () => ({
+vi.mock("@/sni-engine/lib/analysis", () => ({
   analyzeVCFG: analyzeVCFGMock,
 }));
 
@@ -33,6 +33,10 @@ describe("analysis-engine analyze", () => {
 
     await analyze("source code");
 
+    expect(buildVCFGMock).toHaveBeenCalledWith("source code", {
+      windowSize: undefined,
+      mode: undefined,
+    });
     expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
       traceMode: "single-path",
     });
@@ -49,8 +53,17 @@ describe("analysis-engine analyze", () => {
       result: "Secure",
     });
 
-    await analyze("source code", { traceMode: "bfs", maxSteps: 3 });
+    await analyze("source code", {
+      traceMode: "bfs",
+      maxSteps: 3,
+      vcfgMode: "meta",
+      windowSize: 10,
+    });
 
+    expect(buildVCFGMock).toHaveBeenCalledWith("source code", {
+      windowSize: 10,
+      mode: "meta",
+    });
     expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
       traceMode: "bfs",
       maxSteps: 3,

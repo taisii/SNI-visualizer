@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { analyzeVCFG } from "../src/analysis";
+import { analyzeVCFG } from "../lib/analysis";
 import type { StaticGraph } from "@/lib/analysis-schema";
-import { buildVCFG } from "@/vcfg-builder/src";
+import { buildVCFG } from "@/vcfg-builder";
 
 const baseNode = (
   id: string,

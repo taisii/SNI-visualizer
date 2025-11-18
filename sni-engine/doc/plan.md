@@ -81,14 +81,14 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
 ## 5. 理論ノートとの整合状況メモ（2025-11-17 時点）
 
 ここでは、別途整理した理論ノート「投機的非干渉（SNI）検証のための関係的抽象解釈」と、  
-現行実装（`sni-engine/src/*`, `vcfg-builder/src/*`）の対応関係を簡単に記録しておく。  
+現行実装（`sni-engine/lib/*`, `vcfg-builder/lib/*`）の対応関係を簡単に記録しておく。  
 詳細な数式展開は理論ノート側に譲り、実装観点での差分だけを列挙する。
 
 ### 5.1 一致しているポイント（大枠）
 
 - **VCFG 構造**  
-  - `vcfg-builder/src/vcfg.ts` で、通常ノード `type:"ns"` と投機ノード `type:"spec"`、および `type:"rollback"` エッジを明示的に分離。  
-  - `beqz` は taken/not-taken の 2 本の NS エッジを張り、分岐ごとに「Always mispredict」で両方向の投機パスを展開している。
+  - `vcfg-builder/lib/modes/expanded.ts` では通常ノード `type:"ns"` を複製し `@specX` を付けて投機パスを表現。`vcfg-builder/lib/modes/meta.ts` では NS ノードを共有し、投機区間を示す `spec-begin/spec-end` メタノードだけを `type:"spec"` で追加する。いずれも `type:"rollback"` エッジで復帰を表す。  
+  - `beqz` は taken/not-taken の 2 本の NS エッジを張り、分岐ごとに Always-mispredict で両方向の投機を展開する（モード別のノード表現を使う）。
 
 - **抽象状態 Σ# = (R#, Γ#, O#, J#)**  
   - `AbsState`（`sni-engine/src/state.ts`）が `regs`, `mem`, `obsMem`, `obsCtrl` の 4 成分を持ち、  
@@ -142,3 +142,17 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
   必要に応じて L_SNI^# のより細かい利用（Diverge の活用など）やターゲットアドレス観測を追加していく余地がある。  
 - これ以上の理論仕様への追従（完全なトレース同値性など）が必要になった場合は、  
   別セクション（フェーズ 4 以降）として明示し、このメモを更新する。
+
+## 6. 本メモに未記載だった追加ギャップと対応タスク
+
+- **方向観測（beqz）の整合性**  
+  - 現状: エッジラベル `taken/not` を固定で `EqLow/EqHigh` に対応付けているため、条件が Low でも High でも方向差分だけで Leak になる可能性あり。  
+  - 対応: 条件レジスタの抽象値と連動させる仕様に改めるか、方向観測を無効化するかの設計判断を行い、結果を `analysis.ts` とテスト・`spec.md` に反映する。
+
+- **メモリ観測キーの粒度再検討**  
+  - 現状: `obsMem` キーが `pc:addr式` のため、同一 PC でもアドレス式ごとに履歴が分散し、漏洩検知が弱まる可能性。  
+  - 対応: (A) PC 単位に粗くする、(B) 現行粒度を維持しつつ意図をドキュメント化、のいずれかを決定し、選択理由とテストを追加。
+
+- **VCFG の spec/rollback 構造チェック**  
+  - 現状: 入力グラフに投機開始ノードや rollback エッジが欠落しても検知しない。  
+  - 対応: `parseGraph` または `analyzeVCFG` で必須構造（spec ノード存在、rollback 経路存在）を検証し、欠落時は警告またはエラーとするバリデーションを追加。設計選択を `spec.md` に追記。

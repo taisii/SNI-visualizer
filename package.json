@@ -8,6 +8,7 @@
     "start": "next start",
     "test": "bun x vitest run",
     "lint": "bun x biome lint .",
+    "lint:fix": "bun x biome lint --write",
     "format": "bun x biome format . --write"
   },
   "dependencies": {

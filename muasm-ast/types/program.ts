@@ -1,7 +1,7 @@
 // MuASM プログラム構造の型定義
 
 import type { Instruction } from "./instruction";
-import type { Expr, Identifier } from "./expr";
+import type { Identifier } from "./expr";
 
 export type LabeledInstr = {
   label?: Identifier;
@@ -16,6 +16,3 @@ export type Program = {
   instructions: LabeledInstr[];
   labels: LabelTable;
 };
-
-// 解析／パーサーで利用するユーティリティのため再エクスポート
-export type { Instruction, Expr, Identifier };

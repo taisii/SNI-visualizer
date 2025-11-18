@@ -1,6 +1,7 @@
 // MuASM 命令 AST の型定義
 
 import type { Expr, Identifier, Register } from "./expr";
+import type { JumpResolution } from "./jump";
 
 export type Instruction =
   | { op: "skip"; text: string }
@@ -14,6 +15,6 @@ export type Instruction =
       targetPc: number;
       text: string;
     }
-  | { op: "jmp"; target: Expr; text: string }
+  | { op: "jmp"; target: Expr; resolution?: JumpResolution; text: string }
   | { op: "spbarr"; text: string }
   | { op: "cmov"; dest: Register; cond: Expr; value: Expr; text: string };

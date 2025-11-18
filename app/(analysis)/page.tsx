@@ -21,6 +21,7 @@ export default function Home() {
   const [isAutoPlay, setIsAutoPlay] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [traceMode, setTraceMode] = useState<TraceMode>("single-path");
+  const [vcfgMode, setVcfgMode] = useState<"expanded" | "meta">("expanded");
 
   const activeStep = useMemo(
     () => result?.trace.steps.at(currentStep) ?? null,
@@ -52,7 +53,7 @@ export default function Home() {
     setIsLoading(true);
     setIsAutoPlay(false);
     try {
-      const analysis = await analyze(source, { traceMode });
+      const analysis = await analyze(source, { traceMode, vcfgMode });
       if (analysis.error) {
         throw new Error(analysis.error.message ?? "解析でエラーが発生しました");
       }
@@ -119,6 +120,8 @@ export default function Home() {
               onToggleAutoPlay={() => setIsAutoPlay((v) => !v)}
               traceMode={traceMode}
               onTraceModeChange={(mode) => setTraceMode(mode)}
+              vcfgMode={vcfgMode}
+              onVCFGModeChange={(mode) => setVcfgMode(mode)}
             />
           </div>
           <div className="flex flex-1 flex-col gap-2">

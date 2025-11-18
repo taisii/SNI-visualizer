@@ -1,11 +1,16 @@
-import { buildVCFG } from "@/vcfg-builder/src";
-import { analyzeVCFG, type AnalyzeOptions } from "@/sni-engine/src/analysis";
+import { buildVCFG, type VCFGMode } from "@/vcfg-builder";
+import { analyzeVCFG, type AnalyzeOptions } from "@/sni-engine/lib/analysis";
 import {
   ANALYSIS_SCHEMA_VERSION,
   type AnalysisError,
   type AnalysisResult,
   type TraceMode,
 } from "@/lib/analysis-schema";
+
+type RunnerOptions = AnalyzeOptions & {
+  vcfgMode?: VCFGMode;
+  windowSize?: number;
+};
 
 function buildErrorResult(
   type: AnalysisError["type"],
@@ -33,12 +38,20 @@ function buildErrorResult(
  */
 export async function analyze(
   sourceCode: string,
-  options: AnalyzeOptions = {},
+  options: RunnerOptions = {},
 ): Promise<AnalysisResult> {
   const traceMode = options.traceMode ?? "single-path";
   try {
-    const graph = buildVCFG(sourceCode);
-    return await analyzeVCFG(graph, { ...options, traceMode });
+    const graph = buildVCFG(sourceCode, {
+      windowSize: options.windowSize,
+      mode: options.vcfgMode,
+    });
+    const {
+      vcfgMode: _omitMode,
+      windowSize: _omitWin,
+      ...engineOpts
+    } = options;
+    return await analyzeVCFG(graph, { ...engineOpts, traceMode });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "解析で例外が発生しました";
