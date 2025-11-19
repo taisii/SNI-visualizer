@@ -16,7 +16,15 @@ export function buildMeta(
     return pc;
   };
 
-  const addMetaNode = (id: string, label: string): string => {
+  let specContextSeq = 0;
+  const nextSpecContextId = () => `specctx${specContextSeq += 1}`;
+
+  const addMetaNode = (
+    id: string,
+    label: string,
+    specPhase?: "begin" | "end",
+    specContextId?: string,
+  ): string => {
     graph.addNode({
       id,
       pc: nextVirtualPc(),
@@ -24,6 +32,10 @@ export function buildMeta(
       instruction: "skip",
       instructionAst: { op: "skip", text: "skip" },
       type: "spec",
+      specContext:
+        specPhase && specContextId
+          ? { id: specContextId, phase: specPhase }
+          : undefined,
     });
     return id;
   };
@@ -99,16 +111,25 @@ export function buildMeta(
     budget: number,
     branchNodeId: string,
     label: string,
-    addMeta: (id: string, label: string) => string,
+    addMeta: (
+      id: string,
+      label: string,
+      phase?: "begin" | "end",
+      contextId?: string,
+    ) => string,
   ) {
     if (budget <= 0 || !hasPc(currentIndex)) {
       // Skip empty speculative paths (spec-begin would immediately hit spec-end)
       return;
     }
 
+    const contextId = nextSpecContextId();
+
     const beginId = addMeta(
       `${branchNodeId}:${label}:begin`,
       `spec-begin ${label}`,
+      "begin",
+      contextId,
     );
     graph.addEdge({
       source: branchNodeId,
@@ -117,7 +138,15 @@ export function buildMeta(
       label,
     });
 
-    walkSpec(currentIndex, rollbackIndex, budget, beginId, label, addMeta);
+    walkSpec(
+      currentIndex,
+      rollbackIndex,
+      budget,
+      beginId,
+      label,
+      addMeta,
+      contextId,
+    );
   }
 
   function walkSpec(
@@ -126,13 +155,21 @@ export function buildMeta(
     budget: number,
     prevNodeId: string,
     label: string,
-    addMeta: (id: string, label: string) => string,
+    addMeta: (
+      id: string,
+      label: string,
+      phase?: "begin" | "end",
+      contextId?: string,
+    ) => string,
+    contextId: string,
   ) {
     if (budget <= 0) {
       if (hasPc(rollbackIndex)) {
         const endId = addMeta(
           `${prevNodeId}:${label}:end@${budget}`,
           `spec-end ${label}`,
+          "end",
+          contextId,
         );
         graph.addEdge({ source: prevNodeId, target: endId, type: "spec" });
         graph.addEdge({
@@ -150,6 +187,8 @@ export function buildMeta(
         const endId = addMeta(
           `${prevNodeId}:${label}:end@EOF`,
           `spec-end ${label}`,
+          "end",
+          contextId,
         );
         graph.addEdge({ source: prevNodeId, target: endId, type: "spec" });
         graph.addEdge({
@@ -172,6 +211,8 @@ export function buildMeta(
         const endId = addMeta(
           `${instrNodeId}:${label}:end@${nextBudget}`,
           `spec-end ${label}`,
+          "end",
+          contextId,
         );
         graph.addEdge({ source: instrNodeId, target: endId, type: "spec" });
         graph.addEdge({
@@ -192,6 +233,7 @@ export function buildMeta(
         instrNodeId,
         label,
         addMeta,
+        contextId,
       );
       walkSpec(
         currentIndex + 1,
@@ -200,6 +242,7 @@ export function buildMeta(
         instrNodeId,
         label,
         addMeta,
+        contextId,
       );
       return;
     }
@@ -211,7 +254,15 @@ export function buildMeta(
           target: inst.target,
         });
       }
-      walkSpec(res.pc, rollbackIndex, nextBudget, instrNodeId, label, addMeta);
+      walkSpec(
+        res.pc,
+        rollbackIndex,
+        nextBudget,
+        instrNodeId,
+        label,
+        addMeta,
+        contextId,
+      );
       return;
     }
 
@@ -222,6 +273,7 @@ export function buildMeta(
       instrNodeId,
       label,
       addMeta,
+      contextId,
     );
   }
 }

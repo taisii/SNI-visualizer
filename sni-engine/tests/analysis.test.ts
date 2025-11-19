@@ -16,6 +16,21 @@ const baseNode = (
   instruction,
 });
 
+const specMetaNode = (
+  id: string,
+  pc: number,
+  label: string,
+  phase: "begin" | "end",
+  contextId: string,
+): StaticGraph["nodes"][number] => ({
+  id,
+  pc,
+  label,
+  type: "spec",
+  instruction: "skip",
+  specContext: { id: contextId, phase },
+});
+
 const edge = (
   source: string,
   target: string,
@@ -268,6 +283,47 @@ describe("analyzeVCFG", () => {
     expect(step?.isViolation).toBe(true);
   });
 
+  it("rollback しても外側の投機文脈があれば Speculative を維持する", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "skip"),
+        specMetaNode("sbOuter", -1, "spec-begin outer", "begin", "ctxOuter"),
+        baseNode("n1", 1, "ns", "assign r secret"),
+        specMetaNode("sbInner", -2, "spec-begin inner", "begin", "ctxInner"),
+        baseNode("n2", 2, "ns", "assign q secret"),
+        specMetaNode("seInner", -3, "spec-end inner", "end", "ctxInner"),
+        baseNode("n3", 3, "ns", "assign p secret"),
+        specMetaNode("seOuter", -4, "spec-end outer", "end", "ctxOuter"),
+        baseNode("n4", 4, "ns", "skip"),
+      ],
+      edges: [
+        edge("n0", "sbOuter", "spec"),
+        edge("sbOuter", "n1", "spec"),
+        edge("n1", "sbInner", "spec"),
+        edge("sbInner", "n2", "spec"),
+        edge("n2", "seInner", "spec"),
+        edge("seInner", "n3", "rollback"),
+        edge("n3", "seOuter", "spec"),
+        edge("seOuter", "n4", "rollback"),
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      policy: { regs: { secret: "High", r: "Low", q: "Low", p: "Low" } },
+    });
+    expect(res.result).toBe("Secure");
+
+    const afterInner = res.trace.steps.find(
+      (s) => s.nodeId === "n3" && s.executionMode === "Speculative",
+    );
+    expect(afterInner).toBeDefined();
+
+    const afterOuter = res.trace.steps.find(
+      (s) => s.nodeId === "n4" && s.executionMode === "NS",
+    );
+    expect(afterOuter).toBeDefined();
+  });
+
   it("detects control-flow leak via beqz condition", async () => {
     const graph: StaticGraph = {
       nodes: [
@@ -340,9 +396,8 @@ describe("analyzeVCFG", () => {
 
     const res = await analyzeVCFG(graph, {});
     const order = res.trace.steps.map((s) => s.nodeId);
-    // 現行実装では「状態が変化したノードのみ」ワークリストで展開する。
-    // このグラフではどのノードでも状態が変わらないため、entry と最初の n0 だけが記録される。
-    expect(order).toEqual(["", "n0"]);
+    // 現行実装では「まだ訪れていない modeKey」も 1 度だけログに残す。
+    expect(order).toEqual(["", "n0", "n2"]);
   });
 
   it("worklist trace is finite on cycles and retains converged states", async () => {
@@ -474,7 +529,7 @@ L11:
   beqz y, Loop
 `;
     const graph = buildVCFG(code);
-    const res = await analyzeVCFG(graph, { iterationCap: 300, maxSteps: 300 });
+    const res = await analyzeVCFG(graph, { iterationCap: 2000, maxSteps: 2000 });
     expect(res.error).toBeUndefined();
   });
 

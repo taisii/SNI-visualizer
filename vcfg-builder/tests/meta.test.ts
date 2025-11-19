@@ -127,4 +127,35 @@ beqz cond, L0
       specBeginLabels.some((label) => label.includes("spec: cond != 0")),
     ).toBe(false);
   });
+
+  it("spec メタノードに specContext メタデータを付与する", () => {
+    const graph = buildVCFG(
+      `
+beqz x, L1
+skip
+L1: skip
+`,
+      { windowSize: 2 },
+    );
+
+    const specNodes = graph.nodes.filter((n) => n.type === "spec");
+    expect(specNodes.length).toBeGreaterThan(0);
+
+    const begins = specNodes.filter((n) => n.specContext?.phase === "begin");
+    const ends = specNodes.filter((n) => n.specContext?.phase === "end");
+
+    expect(begins.length).toBeGreaterThan(0);
+    expect(ends.length).toBeGreaterThan(0);
+    for (const begin of begins) {
+      expect(begin.specContext?.id).toBeDefined();
+    }
+    for (const end of ends) {
+      const ctxId = end.specContext?.id;
+      expect(ctxId).toBeDefined();
+      const matchingBegin = begins.find(
+        (node) => node.specContext?.id === ctxId,
+      );
+      expect(matchingBegin).toBeDefined();
+    }
+  });
 });

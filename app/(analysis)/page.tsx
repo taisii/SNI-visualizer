@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { CodeEditor, createInitialSource } from "./features/editor/CodeEditor";
@@ -10,7 +10,11 @@ import { StateViewer } from "./features/visualization/StateViewer";
 import { VCFGView } from "./features/visualization/VCFGView";
 import { analyze } from "./features/analysis-runner/services/analyze";
 import { deriveControlState } from "./features/controls/control-state";
-import type { AnalysisResult, TraceMode } from "@/lib/analysis-schema";
+import type {
+  AnalysisError,
+  AnalysisResult,
+  TraceMode,
+} from "@/lib/analysis-schema";
 
 const AUTO_PLAY_INTERVAL_MS = 800;
 
@@ -21,6 +25,7 @@ export default function Home() {
   const [isAutoPlay, setIsAutoPlay] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [traceMode, setTraceMode] = useState<TraceMode>("single-path");
+  const pendingBfsRetryRef = useRef(false);
 
   const activeStep = useMemo(
     () => result?.trace.steps.at(currentStep) ?? null,
@@ -48,14 +53,56 @@ export default function Home() {
     return () => clearInterval(id);
   }, [isAutoPlay, result]);
 
-  const handleAnalyze = async () => {
+  const formatAnalysisError = (error: AnalysisError) => {
+    const detailRaw = error.detail;
+    const detail =
+      detailRaw === undefined
+        ? undefined
+        : typeof detailRaw === "string"
+          ? detailRaw
+          : JSON.stringify(detailRaw, null, 2);
+    const parts = [`type: ${error.type}`];
+    if (detail) {
+      parts.push(`detail: ${detail}`);
+    }
+    return parts.join("\n");
+  };
+
+  const handleAnalyze = async (modeOverride?: TraceMode) => {
     setIsLoading(true);
     setIsAutoPlay(false);
     try {
-      const analysis = await analyze(source, { traceMode });
+      const modeToUse = modeOverride ?? traceMode;
+      const analysis = await analyze(source, { traceMode: modeToUse });
       if (analysis.error) {
-        throw new Error(analysis.error.message ?? "解析でエラーが発生しました");
-      }
+          const description = formatAnalysisError(analysis.error);
+          const isMaxSteps = Boolean(
+            analysis.error.detail &&
+              typeof analysis.error.detail === "object" &&
+              (analysis.error.detail as Record<string, unknown>).maxSteps !== undefined,
+          );
+          toast.error(analysis.error.message ?? "解析でエラーが発生しました", {
+            description,
+            action: {
+              label: isMaxSteps ? "BFS で再解析" : "詳細コピー",
+              onClick: () => {
+                if (isMaxSteps) {
+                  if (!pendingBfsRetryRef.current) {
+                    pendingBfsRetryRef.current = true;
+                    setTraceMode("bfs");
+                    void handleAnalyze("bfs");
+                  }
+                  return;
+                }
+                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                  void navigator.clipboard.writeText(description);
+                }
+              },
+            },
+          });
+          setResult(null);
+          return;
+        }
       setResult(analysis);
       setCurrentStep(0);
     } catch (e) {
@@ -71,6 +118,7 @@ export default function Home() {
       setResult(null);
     } finally {
       setIsLoading(false);
+      pendingBfsRetryRef.current = false;
     }
   };
 
@@ -112,7 +160,7 @@ export default function Home() {
               isAutoPlay={isAutoPlay}
               currentStep={currentStep}
               maxStep={controlState.maxStep}
-              onAnalyze={handleAnalyze}
+              onAnalyze={() => handleAnalyze()}
               onPrev={handlePrev}
               onNext={handleNext}
               onReset={handleReset}

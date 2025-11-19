@@ -1,6 +1,7 @@
 import type {
   AnalysisResult,
   ExecutionTrace,
+  GraphNode,
   StaticGraph,
   TraceStep,
   TraceMode,
@@ -33,8 +34,38 @@ export type AnalyzeOptions = {
 };
 
 const DEFAULT_CAP = 10_000;
-const DEFAULT_MAX_STEPS = 500;
+const DEFAULT_MAX_STEPS = 10_000;
 const DEFAULT_TRACE_MODE: TraceMode = "bfs";
+
+type ContextStack = readonly string[];
+
+const makeModeKey = (mode: Mode, stack: ContextStack): string =>
+  mode === "NS"
+    ? "NS"
+    : `Speculative|${stack.length === 0 ? "root" : stack.join("::")}`;
+
+const pushContext = (stack: ContextStack, ctxId?: string): ContextStack => {
+  if (!ctxId) return stack;
+  return [...stack, ctxId];
+};
+
+const popContext = (stack: ContextStack, ctxId?: string): ContextStack => {
+  if (!ctxId) return stack.length === 0 ? stack : [];
+  if (stack.length === 0) return stack;
+  const top = stack[stack.length - 1];
+  if (top === ctxId) {
+    return stack.slice(0, -1);
+  }
+  const idx = stack.lastIndexOf(ctxId);
+  if (idx === -1) return [];
+  return stack.slice(0, idx);
+};
+
+const deriveInitialStack = (node: GraphNode, mode: Mode): string[] => {
+  if (mode !== "Speculative") return [];
+  const ctxId = node.specContext?.id;
+  return ctxId ? [ctxId] : [];
+};
 
 
 
@@ -67,25 +98,28 @@ export async function analyzeVCFG(
   const entryNode = getEntryNode(graph, opts.entryNodeId, nodeMap);
   const adj = getAdj(graph);
 
-  const states = new Map<string, Map<Mode, AbsState>>();
-  const ensureState = (nodeId: string, mode: Mode): AbsState => {
-    const m = states.get(nodeId) ?? new Map<Mode, AbsState>();
+  const states = new Map<string, Map<string, AbsState>>();
+  const ensureState = (nodeId: string, modeKey: string): AbsState => {
+    const m = states.get(nodeId) ?? new Map<string, AbsState>();
     states.set(nodeId, m);
-    const st = m.get(mode) ?? bottomState();
-    m.set(mode, st);
+    const st = m.get(modeKey) ?? bottomState();
+    m.set(modeKey, st);
     return st;
   };
 
   const entryMode: Mode = entryNode.type === "spec" ? "Speculative" : "NS";
-  ensureState(entryNode.id, entryMode);
+  const entryStack = deriveInitialStack(entryNode, entryMode);
+  const entryModeKey = makeModeKey(entryMode, entryStack);
+  ensureState(entryNode.id, entryModeKey);
   const seededInit = initState(opts.policy, opts.entryRegs);
   seedRegs(seededInit, usedRegs);
-  states.get(entryNode.id)?.set(entryMode, seededInit);
+  states.get(entryNode.id)?.set(entryModeKey, seededInit);
 
-  const worklist: Array<{ nodeId: string; mode: Mode }> = [
-    { nodeId: entryNode.id, mode: entryMode },
+  type WorkItem = { nodeId: string; mode: Mode; stack: ContextStack };
+  const worklist: WorkItem[] = [
+    { nodeId: entryNode.id, mode: entryMode, stack: entryStack },
   ];
-  const takeNext = (): { nodeId: string; mode: Mode } | undefined =>
+  const takeNext = (): WorkItem | undefined =>
     traceMode === "single-path" ? worklist.pop() : worklist.shift();
 
   let iterations = 0;
@@ -105,10 +139,11 @@ export async function analyzeVCFG(
   while (worklist.length > 0) {
     const shifted = takeNext();
     if (!shifted) break;
-    const { nodeId, mode } = shifted;
+    const { nodeId, mode, stack } = shifted;
     const node = nodeMap.get(nodeId);
     if (!node) continue;
-    const inState = ensureState(nodeId, mode);
+    const modeKey = makeModeKey(mode, stack);
+    const inState = ensureState(nodeId, modeKey);
     seedRegs(inState, usedRegs);
 
     let outState: AbsState;
@@ -128,7 +163,7 @@ export async function analyzeVCFG(
         },
       };
     }
-    states.get(nodeId)?.set(mode, outState);
+    states.get(nodeId)?.set(modeKey, outState);
 
     stepId += 1;
     if (stepId > maxSteps) {
@@ -175,14 +210,31 @@ export async function analyzeVCFG(
           // NS 実行中は meta ノードを経由しない spec エッジを無視
           continue;
         }
-        if (targetNode.label?.startsWith("spec-end")) {
+        if (targetNode.specContext?.phase === "end") {
           // spec-end は投機中のみ訪問可能
           continue;
         }
       }
-      const targetMode: Mode =
-        e.type === "spec" ? "Speculative" : e.type === "rollback" ? "NS" : mode;
-      const tgtState = ensureState(tgtId, targetMode);
+
+      let nextStack: ContextStack = stack;
+      let targetMode: Mode = mode;
+      if (e.type === "spec") {
+        targetMode = "Speculative";
+        const contextIdToPush =
+          targetNode && targetNode.specContext?.phase === "begin"
+            ? targetNode.specContext.id
+            : undefined;
+        nextStack = pushContext(stack, contextIdToPush);
+      } else if (e.type === "rollback") {
+        const popped = popContext(stack, node.specContext?.id);
+        nextStack = popped;
+        targetMode = popped.length > 0 ? "Speculative" : "NS";
+      }
+
+      const targetModeKey = makeModeKey(targetMode, nextStack);
+      const existingStates = states.get(tgtId);
+      const hadState = existingStates?.has(targetModeKey) ?? false;
+      const tgtState = ensureState(tgtId, targetModeKey);
       seedRegs(tgtState, usedRegs);
 
       const { changed } =
@@ -193,10 +245,11 @@ export async function analyzeVCFG(
               { regs: false, mem: false, obsMem: true, obsCtrl: true },
             )
           : mergeState(tgtState, outState);
-      if (changed) {
-        ensureState(tgtId, targetMode);
-        states.get(tgtId)?.set(targetMode, tgtState);
-        worklist.push({ nodeId: tgtId, mode: targetMode });
+      const needsVisit = changed || !hadState;
+      if (needsVisit) {
+        ensureState(tgtId, targetModeKey);
+        states.get(tgtId)?.set(targetModeKey, tgtState);
+        worklist.push({ nodeId: tgtId, mode: targetMode, stack: nextStack });
       }
     }
 

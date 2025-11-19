@@ -39,6 +39,10 @@ export type GraphNode = {
   type: "ns" | "spec"; // 投機パス上のノードは必ず複製し spec を設定する（共有禁止）
   sourceLine?: number;
   specOrigin?: string; // 投機開始元ノード ID（複製時に付与）
+  specContext?: {
+    id: string;
+    phase: "begin" | "end";
+  };
   instruction?: string; // 任意: 元命令の生テキスト。デバッグ/ツールチップ用
   // MuASM の構造化 AST。VCFG ビルダーが付与し、SNI エンジンが優先的に利用する。
   instructionAst?: MuasmInstruction;
