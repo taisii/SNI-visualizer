@@ -56,6 +56,31 @@ describe("analyzeVCFG", () => {
     expect(specStep?.isViolation).toBe(true);
   });
 
+  it("stops exploring once a Leak is observed", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "skip"),
+        baseNode("s1", 1, "spec", "load r secret"),
+        baseNode("n2", 2, "ns", "skip"),
+      ],
+      edges: [
+        edge("n0", "s1", "spec"),
+        edge("s1", "n2", "rollback"),
+        edge("n2", "n0", "ns"),
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      policy: { regs: { secret: "High", r: "Low" }, mem: { secret: "High" } },
+    });
+
+    expect(res.result).toBe("SNI_Violation");
+    const visitedNodes = res.trace.steps.map((s) => s.nodeId);
+    expect(visitedNodes).not.toContain("n2");
+    const lastStep = res.trace.steps[res.trace.steps.length - 1];
+    expect(lastStep?.nodeId).toBe("s1");
+  });
+
   it("barrier-like graph without leak stays Secure", async () => {
     const graph: StaticGraph = {
       nodes: [
@@ -94,26 +119,28 @@ describe("analyzeVCFG", () => {
   it("rollback keeps observations but discards speculative regs/mem", async () => {
     const graph: StaticGraph = {
       nodes: [
-        baseNode("n0", 0, "ns", "skip"),
-        baseNode("s1", 1, "spec", "load r secret"),
+        baseNode("n0", 0, "ns", "assign warm hi"),
+        baseNode("s1", 1, "spec", "load r ptr"),
         baseNode("n2", 2, "ns", "skip"),
       ],
       edges: [edge("n0", "s1", "spec"), edge("s1", "n2", "rollback")],
     };
 
     const res = await analyzeVCFG(graph, {
-      policy: { mem: { secret: "High" }, regs: { secret: "High" } },
+      policy: { regs: { ptr: "Low", hi: "High" } },
     });
 
-    expect(res.result).toBe("SNI_Violation");
+    expect(res.result).toBe("Secure");
     const n2 = res.trace.steps.find(
       (s) => s.nodeId === "n2" && s.executionMode === "NS",
     );
+    expect(n2).toBeDefined();
     const regs = n2?.state.sections.find((s) => s.id === "regs")?.data ?? {};
-    expect(Object.keys(regs).sort()).toEqual(["r", "secret"].sort());
     expect(regs.r.label).toBe("EqLow");
     const obsSection = n2?.state.sections.find((s) => s.id === "obsMem");
-    expect(obsSection?.alert).toBe(true);
+    expect(obsSection?.alert).toBe(false);
+    const obsEntries = obsSection?.data ?? {};
+    expect(obsEntries["1:ptr"]?.label).toBe("EqLow");
   });
 
   it("unknown regs default to EqHigh", async () => {
@@ -246,11 +273,11 @@ describe("analyzeVCFG", () => {
     expect(obs?.data["2"].label).toBe("Leak");
   });
 
-  it("rollback restores baseline regs/mem while keeping obs leak", async () => {
+  it("rollback restores baseline regs/mem after secure speculation", async () => {
     const graph: StaticGraph = {
       nodes: [
         baseNode("n0", 0, "ns", "assign r base"),
-        baseNode("s1", 1, "spec", "store secret secret"),
+        baseNode("s1", 1, "spec", "assign r secret"),
         baseNode("n2", 2, "ns", "skip"),
       ],
       edges: [
@@ -270,7 +297,7 @@ describe("analyzeVCFG", () => {
     const regs = n2ns?.state.sections.find((s) => s.id === "regs")?.data ?? {};
     expect(regs.r.label).toBe("EqLow"); // 基本経路の値に戻る
     const obs = n2ns?.state.sections.find((s) => s.id === "obsMem");
-    expect(obs?.alert).toBe(true); // 投機中の観測は保持
+    expect(obs?.alert).toBe(false);
   });
 
   it("replay trace unrolls cycles up to visit cap in deterministic order", async () => {

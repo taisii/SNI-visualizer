@@ -106,4 +106,25 @@ L: skip
       graph.nodes.some((n) => n.type === "spec" && n.id.includes(":end@")),
     ).toBe(true);
   });
+
+  it("命令が存在しない分岐方向では spec-begin を生成しない", () => {
+    const graph = buildVCFG(
+      `
+L0: skip
+beqz cond, L0
+`,
+      { windowSize: 2, mode: "meta" },
+    );
+
+    const specBeginLabels = graph.nodes
+      .filter((n) => n.type === "spec" && n.label?.startsWith("spec-begin"))
+      .map((n) => n.label ?? "");
+
+    expect(specBeginLabels.some((label) => label.includes("taken→not-taken"))).toBe(
+      true,
+    );
+    expect(
+      specBeginLabels.some((label) => label.includes("not-taken→taken")),
+    ).toBe(false);
+  });
 });

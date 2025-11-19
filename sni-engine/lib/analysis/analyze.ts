@@ -145,14 +145,25 @@ export async function analyzeVCFG(
         },
       };
     }
+    const violation = stateHasViolation(outState);
     stepLogs.push({
       stepId,
       nodeId,
       description: node.label ?? "",
       executionMode: mode,
       state: stateToSections(outState),
-      isViolation: stateHasViolation(outState),
+      isViolation: violation,
     });
+
+    if (violation) {
+      return {
+        schemaVersion: ANALYSIS_SCHEMA_VERSION,
+        graph,
+        trace: { steps: stepLogs } as ExecutionTrace,
+        traceMode,
+        result: "SNI_Violation",
+      };
+    }
 
     const edges = adj.get(nodeId) ?? [];
     for (const e of edges) {

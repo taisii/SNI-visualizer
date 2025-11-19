@@ -119,6 +119,7 @@ export function VCFGView({ graph, activeNodeId }: Props) {
   const rfRef = useRef<ReactFlowInstance<VisualizationNode, VisualizationEdge> | null>(null);
   const activeNodeRef = useRef<string | null>(activeNodeId ?? null);
   const edgeTypes = useMemo(() => ({ elk: ElkEdge }), []);
+  const elk = useMemo(() => new ELK(), []);
 
   useEffect(() => {
     activeNodeRef.current = activeNodeId;
@@ -138,7 +139,6 @@ export function VCFGView({ graph, activeNodeId }: Props) {
       return;
     }
 
-    const elk = new ELK();
     const elkGraph = buildElkGraph(graph);
     const syncFallbackNodes = () =>
       setNodes(applyActiveStyles(fallbackNodes, activeNodeRef.current));
@@ -185,7 +185,13 @@ export function VCFGView({ graph, activeNodeId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [fallbackNodes, fallbackEdges, graph, nodeById, setEdges, setNodes]);
+  }, [elk, fallbackNodes, fallbackEdges, graph, nodeById, setEdges, setNodes]);
+
+  useEffect(() => {
+    return () => {
+      elk.terminateWorker?.();
+    };
+  }, [elk]);
 
   const handleInit = useCallback((instance: ReactFlowInstance<VisualizationNode, VisualizationEdge>) => {
     rfRef.current = instance;
@@ -214,6 +220,7 @@ export function VCFGView({ graph, activeNodeId }: Props) {
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
+          nodesDraggable={false}
           fitView
           fitViewOptions={fitViewOptions}
           proOptions={{ hideAttribution: true }}

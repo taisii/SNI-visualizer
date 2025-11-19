@@ -101,6 +101,11 @@ export function buildMeta(
     label: string,
     addMeta: (id: string, label: string) => string,
   ) {
+    if (budget <= 0 || !hasPc(currentIndex)) {
+      // Skip empty speculative paths (spec-begin would immediately hit spec-end)
+      return;
+    }
+
     const beginId = addMeta(
       `${branchNodeId}:${label}:begin`,
       `spec-begin ${label}`,
