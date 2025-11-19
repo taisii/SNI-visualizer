@@ -10,7 +10,7 @@ vi.mock("@/vcfg-builder", () => ({
   buildVCFG: buildVCFGMock,
 }));
 
-vi.mock("@/sni-engine/lib/analysis", () => ({
+vi.mock("@/sni-engine", () => ({
   analyzeVCFG: analyzeVCFGMock,
 }));
 

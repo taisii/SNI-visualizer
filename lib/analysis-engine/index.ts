@@ -1,5 +1,5 @@
 import { buildVCFG, type VCFGMode } from "@/vcfg-builder";
-import { analyzeVCFG, type AnalyzeOptions } from "@/sni-engine/lib/analysis";
+import { analyzeVCFG, type AnalyzeOptions } from "@/sni-engine";
 import {
   ANALYSIS_SCHEMA_VERSION,
   type AnalysisError,

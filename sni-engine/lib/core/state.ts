@@ -14,7 +14,7 @@ export type AbsState = {
   mem: Map<string, RelValue>;
   // メモリアクセスに関する観測履歴 (MEMLEAK 用)
   obsMem: Map<string, LatticeValue>;
-  // 分岐やジャンプに関する観測履歴 (CTRLLEAK 用、現状は未使用で常に空)
+  // 分岐やジャンプに関する観測履歴 (CTRLLEAK 用)
   obsCtrl: Map<string, LatticeValue>;
 };
 

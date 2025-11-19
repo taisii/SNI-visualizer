@@ -23,7 +23,7 @@
 UI からの単一ファサード `analyze(sourceCode: string, options?: AnalyzeOptions): Promise<AnalysisResult>` を提供する（実装: `app/(analysis)/features/analysis-runner/services/analyze.ts` → `lib/analysis-engine/index.ts`）。  
 内部で VCFG ビルダーと SNI エンジンを順に呼ぶ。`buildVCFG` が例外を投げた場合は `AnalysisResult.error` を埋めて返し、UI 側は Toast で通知後、結果を破棄する（画面は「未解析」に戻る）。
 
-`AnalyzeOptions`（実装: `lib/analysis-engine/index.ts` → `sni-engine/lib/analysis.ts`）で受け付ける項目:
+`AnalyzeOptions`（実装: `lib/analysis-engine/index.ts` → `sni-engine/index.ts` → `sni-engine/lib/analysis/analyze.ts`）で受け付ける項目:
 - `traceMode`: `"single-path"`（UI デフォルト）または `"bfs"`  
 - `policy`: `{ regs?: Record<string,"Low"|"High">; mem?: Record<string,"Low"|"High"> }`
 - `entryRegs`: 解析開始時に EqLow で初期化するレジスタ名の配列

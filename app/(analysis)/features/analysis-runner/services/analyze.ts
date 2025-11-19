@@ -1,5 +1,5 @@
 import type { AnalysisResult } from "@/lib/analysis-schema";
-import type { AnalyzeOptions } from "@/sni-engine/lib/analysis";
+import type { AnalyzeOptions } from "@/sni-engine";
 import type { VCFGMode } from "@/vcfg-builder";
 import { analyze as runAnalysis } from "@/lib/analysis-engine";
 

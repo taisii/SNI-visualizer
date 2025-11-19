@@ -12,7 +12,7 @@
 - 主要コンポーネント:
   - Web UI (Next.js) — `app/(analysis)/*`
   - VCFG ビルダー — `vcfg-builder/lib/*`（エントリ `lib/build-vcfg.ts`、モード expanded/meta）
-  - SNI 解析コア — `sni-engine/lib/analysis.ts`
+  - SNI 解析コア — `sni-engine/lib/analysis/analyze.ts`
   - 共通スキーマ / ファサード — `lib/analysis-schema`, `lib/analysis-engine`
 
 データフローは「MuASM 文字列 → buildVCFG() → analyzeVCFG() → AnalysisResult → Web UI」。
@@ -23,7 +23,7 @@
   - MuASM をパースし NS/spec/rollback 辺を生成。デフォルト投機ウィンドウは 20。
   - モード: `expanded`（投機パスをノード複製し `@specX` で区別） / `meta`（NS ノード共有＋`spec-begin/spec-end` メタノードを spec/rollback で接続）。
   - ノードに `instructionAst` を埋め、文字列表示用の `instruction` も保持。
-- 解析コア (`sni-engine/lib/analysis.ts`):
+- 解析コア (`sni-engine/lib/analysis/analyze.ts`):
   - AST を優先して命令を評価（文字列はフォールバック）。  
   - NS/SP 二成分の抽象状態と観測履歴 `obsMem` / `obsCtrl` を保持し、Leak 判定に使用。  
   - ワークリストは `traceMode` で BFS / LIFO 切替。`iterationCap`=10,000, `maxSteps`=500 で打ち切り。  
@@ -74,6 +74,6 @@
 - スキーマ: `lib/analysis-schema/index.ts`
 - ファサード: `lib/analysis-engine/index.ts`
 - VCFG ビルダー: `vcfg-builder/lib/build-vcfg.ts`
-- 解析コア: `sni-engine/lib/analysis.ts`
+- 解析コア: `sni-engine/lib/analysis/analyze.ts`
 - Web UI: `app/(analysis)/*`
 - 計画関連: `Doc/web-plan.md`, `sni-engine/doc/plan.md`

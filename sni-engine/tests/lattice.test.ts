@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { join, toDisplay, LATTICE_VALUES } from "../lib/lattice";
+import { join, toDisplay, LATTICE_VALUES } from "../lib/core/lattice";
 
 const lv = LATTICE_VALUES;
 

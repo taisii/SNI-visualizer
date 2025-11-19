@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { analyzeVCFG } from "../lib/analysis";
+import { analyzeVCFG } from "../lib/analysis/analyze";
 import type { StaticGraph } from "@/lib/analysis-schema";
 import { buildVCFG } from "@/vcfg-builder";
 
