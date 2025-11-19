@@ -16,7 +16,7 @@ import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { ElkEdgeSection, ElkExtendedEdge } from "elkjs";
-import type { StaticGraph } from "@/lib/analysis-schema";
+import type { StaticGraph, TraceStep } from "@/lib/analysis-schema";
 import {
   NODE_HEIGHT,
   NODE_WIDTH,
@@ -29,6 +29,7 @@ import { ElkEdge, type ElkEdgeData } from "./ElkEdge";
 type Props = {
   graph: StaticGraph | null;
   activeNodeId: string | null;
+  activeMode?: TraceStep["executionMode"];
 };
 
 const fitViewOptions: FitViewOptions<VisualizationNode> = {
@@ -40,6 +41,19 @@ const nodeColors = {
   ns: "#2563eb", // blue
   spec: "#f59e0b", // amber
 } as const;
+
+const activeColors: Record<TraceStep["executionMode"], { border: string; bg: string; shadow: string }> = {
+  NS: {
+    border: "#60a5fa", // blue-400
+    bg: "#dbeafe", // blue-100
+    shadow: "rgba(96,165,250,0.3)",
+  },
+  Speculative: {
+    border: "#fbbf24", // amber-400
+    bg: "#fef3c7", // amber-100
+    shadow: "rgba(251,191,36,0.3)",
+  },
+};
 
 const edgeColors = {
   ns: "#94a3b8",
@@ -71,7 +85,14 @@ function toNodes(graph: StaticGraph): VisualizationNode[] {
 function baseNodeStyle(
   type: StaticGraph["nodes"][number]["type"],
   active: boolean,
+  activeMode?: TraceStep["executionMode"],
 ) {
+  const activeStyle = active
+    ? activeMode
+      ? activeColors[activeMode]
+      : activeColors.NS
+    : null;
+
   return {
     width: NODE_WIDTH,
     height: NODE_HEIGHT,
@@ -79,13 +100,13 @@ function baseNodeStyle(
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
-    border: `2px solid ${active ? "#60a5fa" : nodeColors[type]}`,
-    background: active ? "#dbeafe" : "#ffffff",
+    border: `2px solid ${activeStyle ? activeStyle.border : nodeColors[type]}`,
+    background: activeStyle ? activeStyle.bg : "#ffffff",
     color: "#0f172a",
     padding: 8,
     borderRadius: 8,
     fontSize: 12,
-    boxShadow: active ? "0 0 0 3px rgba(96,165,250,0.3)" : "none",
+    boxShadow: activeStyle ? `0 0 0 3px ${activeStyle.shadow}` : "none",
   } as const;
 }
 
@@ -106,7 +127,7 @@ function toEdges(graph: StaticGraph): VisualizationEdge[] {
   });
 }
 
-export function VCFGView({ graph, activeNodeId }: Props) {
+export function VCFGView({ graph, activeNodeId, activeMode }: Props) {
   const fallbackNodes = useMemo(() => (graph ? toNodes(graph) : []), [graph]);
   const fallbackEdges = useMemo(() => (graph ? toEdges(graph) : []), [graph]);
   const nodeById = useMemo(() => {
@@ -118,14 +139,27 @@ export function VCFGView({ graph, activeNodeId }: Props) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<VisualizationEdge>(fallbackEdges);
   const rfRef = useRef<ReactFlowInstance<VisualizationNode, VisualizationEdge> | null>(null);
   const activeNodeRef = useRef<string | null>(activeNodeId ?? null);
+  const activeModeRef = useRef<TraceStep["executionMode"] | null>(activeMode ?? null);
   const edgeTypes = useMemo(() => ({ elk: ElkEdge }), []);
   const elk = useMemo(() => new ELK(), []);
 
   useEffect(() => {
     activeNodeRef.current = activeNodeId;
     if (!graph) return;
-    setNodes((prev) => applyActiveStyles(prev, activeNodeId));
+    setNodes((prev) => applyActiveStyles(prev, activeNodeId, activeModeRef.current ?? undefined));
   }, [activeNodeId, graph, setNodes]);
+
+  useEffect(() => {
+    activeModeRef.current = activeMode ?? null;
+    if (!graph) return;
+    setNodes((prev) =>
+      applyActiveStyles(
+        prev,
+        activeNodeRef.current,
+        activeModeRef.current ?? undefined,
+      ),
+    );
+  }, [activeMode, graph, setNodes]);
 
   useEffect(() => {
     setEdges(fallbackEdges);
@@ -141,7 +175,13 @@ export function VCFGView({ graph, activeNodeId }: Props) {
 
     const elkGraph = buildElkGraph(graph);
     const syncFallbackNodes = () =>
-      setNodes(applyActiveStyles(fallbackNodes, activeNodeRef.current));
+      setNodes(
+        applyActiveStyles(
+          fallbackNodes,
+          activeNodeRef.current,
+          activeModeRef.current ?? undefined,
+        ),
+      );
     syncFallbackNodes();
 
     let cancelled = false;
@@ -164,6 +204,9 @@ export function VCFGView({ graph, activeNodeId }: Props) {
             style: baseNodeStyle(
               original?.type ?? "ns",
               child.id === activeNodeRef.current,
+              child.id === activeNodeRef.current
+                ? activeModeRef.current ?? undefined
+                : undefined,
             ),
           } satisfies VisualizationNode;
         });
@@ -236,10 +279,15 @@ export function VCFGView({ graph, activeNodeId }: Props) {
 function applyActiveStyles(
   targetNodes: VisualizationNode[],
   activeNodeId: string | null,
+  activeMode?: TraceStep["executionMode"],
 ): VisualizationNode[] {
   return targetNodes.map((node) => ({
     ...node,
-    style: baseNodeStyle(node.data?.nodeType ?? "ns", node.id === activeNodeId),
+    style: baseNodeStyle(
+      node.data?.nodeType ?? "ns",
+      node.id === activeNodeId,
+      node.id === activeNodeId ? activeMode : undefined,
+    ),
   }));
 }
 
@@ -261,3 +309,8 @@ function attachSections(
     },
   }));
 }
+
+export const __testables = {
+  baseNodeStyle,
+  applyActiveStyles,
+};

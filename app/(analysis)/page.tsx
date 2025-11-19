@@ -125,6 +125,7 @@ export default function Home() {
             <VCFGView
               graph={result?.graph ?? null}
               activeNodeId={activeStep?.nodeId ?? null}
+              activeMode={activeStep?.executionMode}
             />
 
           </div>

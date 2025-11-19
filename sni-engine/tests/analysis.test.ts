@@ -200,6 +200,23 @@ describe("analyzeVCFG", () => {
     expect(obs?.alert).toBe(true);
   });
 
+  it("NS モードでは spec-begin ノード以外への spec エッジを辿らない", async () => {
+    const program = `Loop:
+  load z, a
+  load a, c
+  beqz y, Loop
+  load z, a
+  load a, c`;
+    const graph = buildVCFG(program, { windowSize: 5 });
+
+    const res = await analyzeVCFG(graph, { traceMode: "single-path" });
+    const firstSpecStep = res.trace.steps.find((s) => s.executionMode === "Speculative");
+    expect(firstSpecStep).toBeDefined();
+    const node = graph.nodes.find((n) => n.id === firstSpecStep?.nodeId);
+    expect(node?.type).toBe("spec");
+    expect(node?.label?.startsWith("spec-begin")).toBe(true);
+  });
+
   it("cmov joins condition and source", async () => {
     const graph: StaticGraph = {
       nodes: [baseNode("n0", 0, "ns", "cmov dst cond src")],
@@ -227,13 +244,20 @@ describe("analyzeVCFG", () => {
     expect(res.trace.steps).toHaveLength(0);
   });
 
-  it("speculative edge keeps speculative mode even if target node is ns", async () => {
+  it("speculative edge keeps speculative mode when NS -> spec-begin -> ns", async () => {
     const graph: StaticGraph = {
       nodes: [
         baseNode("n0", 0, "ns", "skip"),
+        {
+          id: "sb",
+          pc: -1,
+          label: "spec-begin unit-test",
+          type: "spec",
+          instruction: "skip",
+        },
         baseNode("n1", 1, "ns", "load x secret"),
       ],
-      edges: [edge("n0", "n1", "spec")],
+      edges: [edge("n0", "sb", "spec"), edge("sb", "n1", "spec")],
     };
 
     const res = await analyzeVCFG(graph, {

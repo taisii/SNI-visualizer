@@ -168,6 +168,18 @@ export async function analyzeVCFG(
     const edges = adj.get(nodeId) ?? [];
     for (const e of edges) {
       const tgtId = e.target;
+      const targetNode = nodeMap.get(tgtId);
+      const isSpecNode = targetNode?.type === "spec";
+      if (e.type === "spec" && mode !== "Speculative") {
+        if (!isSpecNode) {
+          // NS 実行中は meta ノードを経由しない spec エッジを無視
+          continue;
+        }
+        if (targetNode.label?.startsWith("spec-end")) {
+          // spec-end は投機中のみ訪問可能
+          continue;
+        }
+      }
       const targetMode: Mode =
         e.type === "spec" ? "Speculative" : e.type === "rollback" ? "NS" : mode;
       const tgtState = ensureState(tgtId, targetMode);
