@@ -5,11 +5,9 @@ import type { BuildOptions } from "../types";
 import { normalizeOptions } from "./options";
 import { createProgramContext } from "./program-context";
 import { GraphBuilder } from "./graph-builder";
-import { createSpecContextFactory } from "./spec-context";
-import { buildExpanded } from "./modes/expanded";
 import { buildMeta } from "./modes/meta";
 
-export type { BuildOptions, VCFGMode } from "../types";
+export type { BuildOptions } from "../types";
 
 export function buildVCFG(
   sourceCode: string,
@@ -23,18 +21,13 @@ export function buildVCFGFromProgram(
   program: Program,
   options: BuildOptions = 20,
 ): StaticGraph {
-  const { windowSize, mode } = normalizeOptions(options);
+  const { windowSize } = normalizeOptions(options);
   const ctx = createProgramContext(program);
   const graph = new GraphBuilder();
 
   emitBaseNodes(ctx, graph);
 
-  if (mode === "expanded") {
-    const createSpecContextId = createSpecContextFactory();
-    buildExpanded(ctx, graph, windowSize, createSpecContextId);
-  } else {
-    buildMeta(ctx, graph, windowSize);
-  }
+  buildMeta(ctx, graph, windowSize);
 
   return graph.toGraph();
 }

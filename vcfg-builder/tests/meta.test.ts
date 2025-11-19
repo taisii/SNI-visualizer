@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildVCFG } from "..";
 
-describe("buildVCFG meta mode", () => {
+describe("buildVCFG (meta モードのみ)", () => {
   it("命令ノードを単一化しつつ spec 区間をマークする", () => {
     const graph = buildVCFG(
       `
@@ -9,7 +9,7 @@ beqz cond, L1
 skip
 L1: skip
 `,
-      { windowSize: 2, mode: "meta" },
+      { windowSize: 2 },
     );
 
     const nsNodes = graph.nodes.filter((n) => n.type === "ns");
@@ -36,7 +36,7 @@ beqz x, L
 skip
 L: skip
 `,
-      { windowSize: 2, mode: "meta" },
+      { windowSize: 2 },
     );
 
     const specBegin = graph.nodes.find((n) => n.id.includes(":begin"));
@@ -67,7 +67,7 @@ beqz x, L
 spbarr
 L: skip
 `,
-      { windowSize: 3, mode: "meta" },
+      { windowSize: 3 },
     );
 
     const nsPcs = graph.nodes
@@ -90,7 +90,7 @@ beqz x, L
 skip
 L: skip
 `,
-      { windowSize: 1, mode: "meta" },
+      { windowSize: 1 },
     );
 
     const rollbackTargets = new Set(
@@ -113,7 +113,7 @@ L: skip
 L0: skip
 beqz cond, L0
 `,
-      { windowSize: 2, mode: "meta" },
+      { windowSize: 2 },
     );
 
     const specBeginLabels = graph.nodes

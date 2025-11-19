@@ -5,7 +5,7 @@
 - 根拠: `app/(analysis)/page.tsx`・`app/(analysis)/features/*`・`lib/analysis-engine/index.ts`・`lib/analysis-schema/index.ts`
 
 本ドキュメントは「いま動いている Web UI が何をしているか」を実装コードから逆算してまとめた現行仕様書である。  
-理論仕様や将来計画は含めず、UI が依存するデータ構造と画面挙動を記述する。VCFG ビルダーのモード（expanded/meta）やオプションも実装ベースで反映する。
+理論仕様や将来計画は含めず、UI が依存するデータ構造と画面挙動を記述する。VCFG ビルダーは meta 版のみを提供しており、その仕様やオプションを実装ベースで反映する。
 
 ## 0. 役割と全体像
 
@@ -30,15 +30,12 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 - `entryNodeId`: 開始ノード ID（省略時は先頭ノード）
 - `iterationCap` / `maxSteps`: 不動点計算とトレース生成の打ち切り上限
 - VCFG ビルダー向けオプション（UI も透過的に渡す）:
-  - `vcfgMode`: `"expanded"`（デフォルト）または `"meta"`
   - `windowSize`: 投機ウィンドウサイズ（デフォルト 20）
 
 ### 1.2 AnalysisResult スキーマ（UI が前提する形）
 
 - 互換キー: `schemaVersion = "1.0.0"`
-- `graph: StaticGraph` — ノード/エッジと種類（ns/spec/rollback）。  
-  - expanded モード: 投機パスはノードを複製し `id=@specX` で区別。  
-  - meta モード: NS ノードを共有し、分岐ごとに `spec-begin/spec-end` メタノードを spec エッジで挟む（spec ノードは meta ノードのみ生成）。  
+- `graph: StaticGraph` — ノード/エッジと種類（ns/spec/rollback）。VCFG は meta 表現のみで、NS ノードを共有し分岐ごとに `spec-begin/spec-end` メタノードを spec エッジで挟む（spec ノードは meta ノードのみ生成）。  
 - `trace.steps[]` — 各ステップの `{ stepId, nodeId, description, executionMode, state, isViolation }`。  
 - `state.sections[]` — 汎用セクション配列。`data` は任意キーに `DisplayValue{ label, style }` を紐付ける。`alert` でセクション単位の強調可。  
 - `result` — `"Secure"` または `"SNI_Violation"` をヘッダーでバッジ表示。  
@@ -73,7 +70,7 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
   - Auto Play: 800ms 間隔でステップ前進。`isViolation` または末尾到達で自動停止。  
   - ステップ表示: `Step (current+1) / max`。未解析時は `--/--`。
 - **CodeEditor**: MuASM テキストエリアを単一 Accordion で折りたたみ可能にしたもの。デモコードリセットボタン付き。入力変更はソースだけを更新し、解析結果は保持したまま。  
-- **VCFGView**: React Flow で VCFG を描画。`type` で色分け（ns=青、spec=橙、rollback=赤）し、`activeNodeId` を太枠＋淡青背景で強調。meta モードでは NS ノードを共有し spec-begin/end メタノードを描画する。データが無い場合はプレースホルダ。左ペイン下部に配置し、`flex-1` + `min-h` で列の残り高さを占有する。  
+- **VCFGView**: React Flow で VCFG を描画。`type` で色分け（ns=青、spec=橙、rollback=赤）し、`activeNodeId` を太枠＋淡青背景で強調。VCFG は meta 仕様で生成されるため、NS ノード共有＋ spec-begin/end メタノード構造を描画する。データが無い場合はプレースホルダ。左ペイン下部に配置し、`flex-1` + `min-h` で列の残り高さを占有する。  
 - **StateViewer**: `sections` を反復描画。`alert` で赤枠＋ALERT バッジ、`DisplayValue.style` を色付きバッジで表示。データが無い場合はプレースホルダ。右ペイン下部に配置。
 - **Toast (sonner)**: 解析失敗時にエラー文言を表示し、「再解析」アクションで再実行できる。
 

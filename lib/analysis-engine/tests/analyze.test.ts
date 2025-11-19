@@ -35,7 +35,6 @@ describe("analysis-engine analyze", () => {
 
     expect(buildVCFGMock).toHaveBeenCalledWith("source code", {
       windowSize: undefined,
-      mode: undefined,
     });
     expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
       traceMode: "single-path",
@@ -56,13 +55,11 @@ describe("analysis-engine analyze", () => {
     await analyze("source code", {
       traceMode: "bfs",
       maxSteps: 3,
-      vcfgMode: "meta",
       windowSize: 10,
     });
 
     expect(buildVCFGMock).toHaveBeenCalledWith("source code", {
       windowSize: 10,
-      mode: "meta",
     });
     expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
       traceMode: "bfs",

@@ -11,7 +11,7 @@
 - 中核技術: VCFG（仮想制御フローグラフ） + 抽象解釈 + Always-Mispredict 投機モデル。
 - 主要コンポーネント:
   - Web UI (Next.js) — `app/(analysis)/*`
-  - VCFG ビルダー — `vcfg-builder/lib/*`（エントリ `lib/build-vcfg.ts`、モード expanded/meta）
+  - VCFG ビルダー — `vcfg-builder/lib/*`（エントリ `lib/build-vcfg.ts`、meta 仕様のみ）
   - SNI 解析コア — `sni-engine/lib/analysis/analyze.ts`
   - 共通スキーマ / ファサード — `lib/analysis-schema`, `lib/analysis-engine`
 
@@ -21,7 +21,7 @@
 - スキーマ: `StaticGraph` / `AnalysisResult` を `lib/analysis-schema/index.ts` に集約。ノードは AST (`instructionAst`) を保持。
 - VCFG ビルダー (`vcfg-builder/lib/build-vcfg.ts`):
   - MuASM をパースし NS/spec/rollback 辺を生成。デフォルト投機ウィンドウは 20。
-  - モード: `expanded`（投機パスをノード複製し `@specX` で区別） / `meta`（NS ノード共有＋`spec-begin/spec-end` メタノードを spec/rollback で接続）。
+  - モード: `meta`（NS ノード共有＋`spec-begin/spec-end` メタノードを spec/rollback で接続）。
   - ノードに `instructionAst` を埋め、文字列表示用の `instruction` も保持。
 - 解析コア (`sni-engine/lib/analysis/analyze.ts`):
   - AST を優先して命令を評価（文字列はフォールバック）。  
@@ -29,10 +29,8 @@
   - ワークリストは `traceMode` で BFS / LIFO 切替。`iterationCap`=10,000, `maxSteps`=500 で打ち切り。  
   - 解析中に `trace.steps` を逐次生成し UI へ返却。
 - Web UI (`app/(analysis)/page.tsx` ほか):
-  - `analyze(source, { traceMode, vcfgMode })` を直接呼び出し、VCFG と抽象状態を描画。  
-  - Prev/Next/Auto Play、トレースモード切替（single-path デフォルト / bfs）。  
-  - VCFG 表示モード切替（expanded/meta）を UI で指定しエンジンに渡す。  
-  - 左ペイン: 操作パネル（sticky）＋ VCFG ビュー。右ペイン: MuASM エディタ（Accordion で折りたたみ可）＋ 抽象状態ビュー。  
+  - `analyze(source, { traceMode })` を直接呼び出し、VCFG と抽象状態を描画。  
+  - Prev/Next/Auto Play、トレースモード切替（single-path デフォルト / bfs）。右ペイン: MuASM エディタ（Accordion で折りたたみ可）＋ 抽象状態ビュー。  
   - 解析失敗時は Toast 表示＋結果クリア（未解析に戻る）。ポリシー入力 UI は未実装。  
   - 入力編集時も結果保持（既知制約）。
 - テスト:
@@ -62,8 +60,8 @@
 
 ## 6. 成否確認の現状
 - 投機パスを含むプログラムで Leak を検出できることをユニットテストで確認（`sni-engine/tests/analysis.test.ts`）。  
-- VCFG が投機ノード複製と rollback 辺を含むことをテストで確認（`vcfg-builder/tests/index.test.ts`）。  
-- UI は手動確認ベース（自動化は今後の課題）。
+- VCFG が meta 仕様（`spec-begin/spec-end` メタノード + rollback）で生成されることを回帰テストで確認（`vcfg-builder/tests/meta.test.ts`, `vcfg-builder/tests/integration.test.ts`）。  
+- UI レイヤは `app/(analysis)/features/visualization/elkLayout.test.ts` などのユニットテストでグラフ入力・レイアウトオプションを検証し、画面全体は手動確認ベース（E2E 自動化は未着手）。
 
 ## 7. 今後の計画
 - UI 改善・新機能は `Doc/web-plan.md` を参照（ポリシー入力、編集時の結果クリア等）。  

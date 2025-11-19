@@ -1,4 +1,4 @@
-import { buildVCFG, type VCFGMode } from "@/vcfg-builder";
+import { buildVCFG } from "@/vcfg-builder";
 import { analyzeVCFG, type AnalyzeOptions } from "@/sni-engine";
 import {
   ANALYSIS_SCHEMA_VERSION,
@@ -8,7 +8,6 @@ import {
 } from "@/lib/analysis-schema";
 
 type RunnerOptions = AnalyzeOptions & {
-  vcfgMode?: VCFGMode;
   windowSize?: number;
 };
 
@@ -44,13 +43,8 @@ export async function analyze(
   try {
     const graph = buildVCFG(sourceCode, {
       windowSize: options.windowSize,
-      mode: options.vcfgMode,
     });
-    const {
-      vcfgMode: _omitMode,
-      windowSize: _omitWin,
-      ...engineOpts
-    } = options;
+    const { windowSize: _omitWin, ...engineOpts } = options;
     return await analyzeVCFG(graph, { ...engineOpts, traceMode });
   } catch (err) {
     const message =

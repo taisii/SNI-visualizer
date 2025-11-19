@@ -10,7 +10,7 @@
 
 ## 2. 出力（StaticGraph）
 - **スキーマの正本**: `StaticGraph`/`AnalysisResult` の正式スキーマは `doc/project.md` §3 と `lib/analysis-schema/index.ts` をソース・オブ・トゥルースとする。本書は生成ポリシーと実装上の挙動のみを要約する。
-- **ノード生成ポリシー**: 各命令に ID `n{pc}` を付与し、フィールドはスキーマに沿って埋める（例: `pc`、`label`、`type`、`sourceLine`）。参照: `vcfg-builder/lib/build-vcfg.ts`、`vcfg-builder/lib/modes/*`。
+- **ノード生成ポリシー**: 各命令に ID `n{pc}` を付与し、フィールドはスキーマに沿って埋める（例: `pc`、`label`、`type`、`sourceLine`）。参照: `vcfg-builder/lib/build-vcfg.ts`、`vcfg-builder/lib/modes/meta.ts`。
 - **エッジ生成ポリシー**: `type` は `ns` / `spec` / `rollback` を使用し、重複はセットで排除。参照: `vcfg-builder/lib/graph-builder.ts`。
 - **返却単位**: `buildVCFG` はグラフ構造のみを返す。`schemaVersion` 付与とエラーハンドリングは上位ファサード `analyze()`（`lib/analysis-engine/index.ts`）で行う。
 
@@ -19,19 +19,18 @@
    - ラベル表と命令列を構築し、`beqz` の分岐先 PC を事前解決します。未定義ラベルや無効トークンは `ParseError`（sourceLine 付き）で失敗。参照: `muasm-ast/lib/parser.ts`。
 
 2. **通常パスのグラフ化**  
-   - 全命令を通常ノードとして登録。`jmp` は解決先へ 1 本、`beqz` は taken / not-taken の 2 本、その他は次行へのフォールスルーを張ります。参照: `vcfg-builder/lib/modes/expanded.ts`・`vcfg-builder/lib/modes/meta.ts`。
+   - 全命令を通常ノードとして登録。`jmp` は解決先へ 1 本、`beqz` は taken / not-taken の 2 本、その他は次行へのフォールスルーを張ります。参照: `vcfg-builder/lib/modes/meta.ts`。
 
-3. **投機パスの展開（モード別）**  
-   - expanded: 分岐ごとに「とらない側」「とる側」を別コンテキスト（`spec0`, `spec1`, ...）で再帰展開し、投機ノードを複製。予算ゼロまたは `spbarr` で `rollback`。
-   - meta: NS ノードを共有しつつ、分岐ごとに `spec-begin` / `spec-end` のメタノード（`type:"spec"`）を追加して投機領域をマーキング。予算ゼロまたは `spbarr` で `rollback`。
+3. **投機パスの展開（meta モード）**  
+   - NS ノードを共有しつつ、分岐ごとに `spec-begin` / `spec-end` のメタノード（`type:"spec"`）を追加して投機領域をマーキング。予算ゼロまたは `spbarr` で `rollback`。
+   - 分岐内部でも `beqz` や `jmp` を再帰的に辿り、予算をデクリメントしながら `spec` エッジを追加する。参照: `vcfg-builder/lib/modes/meta.ts`。
 
 4. **ロールバックの安全側制御**  
-   - ロールバック先 PC が存在しない場合（例: プログラム末尾を超える場合）はエッジを張らずに終了し、無効 ID への遷移を防ぎます。参照: `vcfg-builder/lib/modes/*`。
+   - ロールバック先 PC が存在しない場合（例: プログラム末尾を超える場合）はエッジを張らずに終了し、無効 ID への遷移を防ぎます。参照: `vcfg-builder/lib/modes/meta.ts`。
 
 ## 4. エラーと制約
 - `windowSize <= 0` で例外（予防的ガード）。`vcfg-builder/lib/options.ts`。
 - `jmp` の解決不可、ラベル未定義、重複ラベル、無効トークン、式の構文エラーはいずれも `ParseError` 派生の例外で通知。`muasm-ast/lib/parser.ts`、`vcfg-builder/lib/modes/*`。
-- expanded: 投機ノードの ID は `<通常ID>@specN` で一意化し、同一コンテキスト内での重複挿入はスキップします。
 - meta: NS ノードは共有し、投機区間を示すメタノードのみ `type:"spec"` で追加します。
 
 ## 5. 既知の挙動・制限
