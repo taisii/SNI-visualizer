@@ -37,7 +37,7 @@ export function CodeEditor({ value, onChange }: Props) {
               type="button"
               onClick={() => onChange(DEFAULT_CODE)}
             >
-              デモコードをリセット
+              コードをリセット
             </button>
           </div>
           <textarea

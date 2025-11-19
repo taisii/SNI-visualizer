@@ -126,9 +126,7 @@ export default function Home() {
               graph={result?.graph ?? null}
               activeNodeId={activeStep?.nodeId ?? null}
             />
-            <div className="text-xs text-neutral-600">
-              現在ステップ: {activeStep ? activeStep.description : "未解析"}
-            </div>
+
           </div>
         </section>
 
