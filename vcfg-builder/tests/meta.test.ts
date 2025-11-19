@@ -50,7 +50,7 @@ L: skip
         .map((e) => e.label),
     );
     expect(specEdgeLabels).toEqual(
-      new Set(["not-taken→taken", "taken→not-taken"]),
+      new Set(["spec: x != 0", "spec: x == 0"]),
     );
 
     // rollback は NS ノードへ戻る
@@ -120,11 +120,11 @@ beqz cond, L0
       .filter((n) => n.type === "spec" && n.label?.startsWith("spec-begin"))
       .map((n) => n.label ?? "");
 
-    expect(specBeginLabels.some((label) => label.includes("taken→not-taken"))).toBe(
+    expect(specBeginLabels.some((label) => label.includes("spec: cond == 0"))).toBe(
       true,
     );
     expect(
-      specBeginLabels.some((label) => label.includes("not-taken→taken")),
+      specBeginLabels.some((label) => label.includes("spec: cond != 0")),
     ).toBe(false);
   });
 });

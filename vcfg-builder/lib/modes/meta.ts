@@ -70,7 +70,7 @@ export function buildMeta(
         takenTarget,
         windowSize,
         currentNodeId,
-        "not-taken→taken",
+        `spec: ${inst.cond} != 0`,
         addMetaNode,
       );
       traceSpeculativeMeta(
@@ -78,7 +78,7 @@ export function buildMeta(
         idx + 1,
         windowSize,
         currentNodeId,
-        "taken→not-taken",
+        `spec: ${inst.cond} == 0`,
         addMetaNode,
       );
       continue;

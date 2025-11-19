@@ -210,9 +210,6 @@ export function VCFGView({ graph, activeNodeId }: Props) {
     <div className="flex h-full flex-col gap-2 rounded border border-neutral-200 bg-white p-3">
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold text-neutral-800">VCFG</div>
-        <div className="text-[11px] text-neutral-500">
-          ドラッグで移動、ホイールでズーム
-        </div>
       </div>
       <div className="flex-1 min-h-[420px] w-full rounded border border-neutral-100">
         <ReactFlow<VisualizationNode, VisualizationEdge>
