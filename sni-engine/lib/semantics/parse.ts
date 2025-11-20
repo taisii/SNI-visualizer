@@ -96,15 +96,16 @@ export function toAstFromString(
     }
     case "spbarr":
       return { op: "spbarr", text: "spbarr" } as Instruction;
-    case "beqz": {
+    case "beqz":
+    case "bnez": {
       const [cond] = rest;
       if (!cond) return undefined;
       return {
-        op: "beqz",
+        op,
         cond,
         target: cond,
         targetPc: -1,
-        text: `beqz ${cond}`,
+        text: `${op} ${cond}`,
       } as Instruction;
     }
     case "jmp": {

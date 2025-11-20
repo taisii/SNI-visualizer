@@ -1,4 +1,4 @@
-import type { GraphNode } from "@/lib/analysis-schema";
+import type { GraphNode, TraceStep } from "@/lib/analysis-schema";
 import type { Instruction, Expr } from "@/muasm-ast";
 import { join, type LatticeValue } from "../core/lattice";
 import { cloneState, type AbsState, type RelValue } from "../core/state";
@@ -12,7 +12,7 @@ import {
 import { defaultMemLabel, evalExpr, getMemByExpr } from "./eval";
 import { normalizeOperand, stringifyExpr, toAstFromString } from "./parse";
 
-export type ExecMode = "NS" | "Speculative";
+export type ExecMode = TraceStep["executionMode"];
 
 function assertNever(instr: never, node: GraphNode): never {
   throw new Error(
@@ -30,7 +30,7 @@ function toMemObsId(pc: number, addr?: Expr): string | undefined {
 export function applyInstruction(
   node: GraphNode,
   state: AbsState,
-  mode: ExecMode,
+  executionMode: ExecMode,
 ): AbsState {
   const next = cloneState(state);
   const instrRaw = node.instruction ?? node.label ?? "";
@@ -53,7 +53,7 @@ export function applyInstruction(
       : undefined;
 
   const setValue = (kind: "reg" | "mem", name: string, value: RelValue) => {
-    if (mode === "NS") {
+    if (executionMode === "NS") {
       kind === "reg" ? setReg(next, name, value) : setMem(next, name, value);
     } else {
       const prev = kind === "reg" ? getReg(next, name) : getMem(next, name);
@@ -66,7 +66,7 @@ export function applyInstruction(
 
   const observeMem = (val: LatticeValue) => {
     if (!memObsId) return;
-    if (mode === "NS") {
+    if (executionMode === "NS") {
       updateMemObsNS(next, memObsId, val);
     } else {
       updateMemObsSpec(next, memObsId, val);
@@ -89,7 +89,7 @@ export function applyInstruction(
         sp: join(lVal.sp, lAddr.sp),
       };
       const observed =
-        mode === "NS"
+        executionMode === "NS"
           ? lAddr.ns === "EqHigh" || lAddr.ns === "Leak" || lAddr.ns === "Top"
             ? "EqHigh"
             : "EqLow"
@@ -108,7 +108,7 @@ export function applyInstruction(
         sp: join(lVal.sp, lAddr.sp),
       };
       const observed =
-        mode === "NS"
+        executionMode === "NS"
           ? lAddr.ns === "EqHigh" || lAddr.ns === "Leak" || lAddr.ns === "Top"
             ? "EqHigh"
             : "EqLow"
@@ -126,10 +126,11 @@ export function applyInstruction(
     }
     case "spbarr":
       break;
-    case "beqz": {
+    case "beqz":
+    case "bnez": {
       const level = getReg(state, ast.cond);
-      const observed = mode === "NS" ? level.ns : level.sp;
-      if (mode === "NS") {
+      const observed = executionMode === "NS" ? level.ns : level.sp;
+      if (executionMode === "NS") {
         updateCtrlObsNS(next, ctrlObsId, observed);
       } else {
         updateCtrlObsSpec(next, ctrlObsId, observed);
@@ -138,7 +139,7 @@ export function applyInstruction(
     }
     case "jmp": {
       const level: LatticeValue = "EqLow";
-      if (mode === "NS") {
+      if (executionMode === "NS") {
         updateCtrlObsNS(next, ctrlObsId, level);
       } else {
         updateCtrlObsSpec(next, ctrlObsId, level);

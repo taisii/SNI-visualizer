@@ -2,7 +2,18 @@
 
 export type Identifier = string;
 export type Register = Identifier;
-export type BinaryOp = "+" | "-" | "*" | "&";
+export type BinaryOp =
+  | "+"
+  | "-"
+  | "*"
+  | "/"
+  | "&"
+  | "<"
+  | ">"
+  | "<="
+  | ">="
+  | "="
+  | "!=";
 
 export type Expr =
   | { kind: "reg"; name: Register }

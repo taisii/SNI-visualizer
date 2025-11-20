@@ -60,6 +60,30 @@ L: skip
     expect([...rollbackTargets].every((id) => id.startsWith("n"))).toBe(true);
   });
 
+  it("supports bnez branches with symmetric spec labels", () => {
+    const graph = buildVCFG(
+      `
+bnez flag, Target
+skip
+Target: skip
+`,
+      { windowSize: 2 },
+    );
+
+    const nsEdges = graph.edges.filter((e) => e.source === "n0");
+    expect(nsEdges.some((e) => e.label === "taken")).toBe(true);
+    expect(nsEdges.some((e) => e.label === "not-taken")).toBe(true);
+
+    const specEdgeLabels = new Set(
+      graph.edges
+        .filter((e) => e.type === "spec" && e.label)
+        .map((e) => e.label),
+    );
+    expect(specEdgeLabels).toEqual(
+      new Set(["spec: flag == 0", "spec: flag != 0"]),
+    );
+  });
+
   it("meta ノードは仮想 PC (負値) を持ち、NS ノードの PC を汚染しない", () => {
     const graph = buildVCFG(
       `

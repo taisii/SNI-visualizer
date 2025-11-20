@@ -57,6 +57,21 @@ later: skip
     expect(program.instructions[1]?.instr.op).toBe("skip");
   });
 
+  it("treats % as a comment delimiter", () => {
+    const program = parse(`
+load x,0 % inline comment
+% full line comment
+x<-v<y % cmp
+    `);
+    expect(program.instructions).toHaveLength(2);
+    const assign = program.instructions[1]?.instr;
+    if (!assign || assign.op !== "assign") throw new Error("expected assign");
+    expect(assign.expr).toMatchObject({
+      kind: "binop",
+      op: "<",
+    });
+  });
+
   it("accepts label-only lines and ties label to the next instruction", () => {
     const program = parse(`
 Loop:
@@ -109,6 +124,66 @@ Loop:
     expect(instr.value).toEqual({ kind: "reg", name: "r2" });
   });
 
+  it("parses cmov keyword form with comparison operators", () => {
+    const program = parse("cmov v>=y,u<-0");
+    const instr = program.instructions[0]?.instr;
+    if (!instr || instr.op !== "cmov") throw new Error("expected cmov");
+    expect(instr.dest).toBe("u");
+    expect(instr.cond).toEqual({
+      kind: "binop",
+      op: ">=",
+      left: { kind: "reg", name: "v" },
+      right: { kind: "reg", name: "y" },
+    });
+    expect(instr.value).toEqual({ kind: "int", value: 0 });
+  });
+
+  it("parses inequality operator !=", () => {
+    const program = parse("x <- a != b");
+    const instr = program.instructions[0]?.instr;
+    if (!instr || instr.op !== "assign") throw new Error("expected assign");
+    expect(instr.expr).toEqual({
+      kind: "binop",
+      op: "!=",
+      left: { kind: "reg", name: "a" },
+      right: { kind: "reg", name: "b" },
+    });
+  });
+
+  it("allows numeric register names in load/store", () => {
+    const program = parse("load 1,x");
+    const instr = program.instructions[0]?.instr;
+    if (!instr || instr.op !== "load") throw new Error("expected load");
+    expect(instr.dest).toBe("1");
+    expect(instr.addr).toEqual({ kind: "reg", name: "x" });
+  });
+
+  it("parses bnez and resolves its label", () => {
+    const program = parse(`
+bnez flag, Exit
+Exit: skip
+    `);
+    const instr = program.instructions[0]?.instr;
+    if (!instr || instr.op !== "bnez") throw new Error("expected bnez");
+    expect(instr.targetPc).toBe(1);
+    expect(instr.cond).toBe("flag");
+  });
+
+  it("supports hex literals and division with stray backslashes", () => {
+    const program = parse("load x,(v/\\1)\nx<-0xfffffff");
+    const loadInstr = program.instructions[0]?.instr;
+    if (!loadInstr || loadInstr.op !== "load") throw new Error("expected load");
+    expect(loadInstr.addr).toEqual({
+      kind: "binop",
+      op: "/",
+      left: { kind: "reg", name: "v" },
+      right: { kind: "int", value: 1 },
+    });
+    const assign = program.instructions[1]?.instr;
+    if (!assign || assign.op !== "assign") throw new Error("expected assign");
+    expect(assign.expr).toEqual({ kind: "int", value: 0xfffffff });
+  });
+
   it("respects operator precedence and associativity", () => {
     const program = parse("x <- 1 + 2 * (3 - 4) & 5");
 
@@ -145,5 +220,19 @@ Loop:
     expect(
       tryResolveJump({ kind: "reg", name: "missing" }, labels),
     ).toBeUndefined();
+  });
+
+  it("inserts a terminal skip if the program ends with a label", () => {
+    const program = parse(`
+start:
+  load r1, x
+end:
+    `);
+    // start: load ... -> pc=0
+    // end: -> pc=1 (skip inserted)
+    expect(program.instructions).toHaveLength(2);
+    expect(program.labels.get("end")).toBe(1);
+    const last = program.instructions[1]?.instr;
+    expect(last?.op).toBe("skip");
   });
 });

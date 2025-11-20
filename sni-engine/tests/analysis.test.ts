@@ -380,6 +380,36 @@ describe("analyzeVCFG", () => {
     expect(obs?.alert).toBe(false);
   });
 
+  it("selects NS/SP updates based on executionMode from trace logic", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "assign r base"),
+        baseNode("s1", 1, "spec", "assign r secret"),
+        baseNode("n2", 2, "ns", "skip"),
+      ],
+      edges: [
+        edge("n0", "s1", "spec"),
+        edge("s1", "n2", "rollback"),
+        edge("n0", "n2", "ns"),
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      policy: { regs: { base: "Low", secret: "High", r: "Low" } },
+    });
+
+    const specAssign = res.trace.steps.find(
+      (s) => s.nodeId === "s1" && s.executionMode === "Speculative",
+    );
+    expect(specAssign).toBeDefined();
+    const regsSection = specAssign?.state.sections.find(
+      (s) => s.id === "regs",
+    );
+    const rDetail = regsSection?.data.r.detail;
+    expect(rDetail?.ns).toBe("EqLow");
+    expect(rDetail?.sp).toBe("EqHigh");
+  });
+
   it("replay trace unrolls cycles up to visit cap in deterministic order", async () => {
     const graph: StaticGraph = {
       nodes: [

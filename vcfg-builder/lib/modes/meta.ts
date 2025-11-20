@@ -60,37 +60,45 @@ export function buildMeta(
       continue;
     }
 
-    if (inst.op === "beqz") {
+    if (inst.op === "beqz" || inst.op === "bnez") {
       const takenTarget = resolveLabel(inst.target);
-      graph.addEdge({
-        source: currentNodeId,
-        target: `n${takenTarget}`,
-        type: "ns",
-        label: "taken",
-      });
-      if (idx + 1 < program.instructions.length) {
+      const fallthroughIndex = idx + 1;
+      if (hasPc(takenTarget)) {
         graph.addEdge({
           source: currentNodeId,
-          target: `n${idx + 1}`,
+          target: `n${takenTarget}`,
+          type: "ns",
+          label: "taken",
+        });
+      }
+      if (fallthroughIndex < program.instructions.length) {
+        graph.addEdge({
+          source: currentNodeId,
+          target: `n${fallthroughIndex}`,
           type: "ns",
           label: "not-taken",
         });
       }
 
+      const condLabelTaken =
+        inst.op === "beqz" ? `${inst.cond} == 0` : `${inst.cond} != 0`;
+      const condLabelNotTaken =
+        inst.op === "beqz" ? `${inst.cond} != 0` : `${inst.cond} == 0`;
+
       traceSpeculativeMeta(
-        idx + 1,
+        fallthroughIndex,
         takenTarget,
         windowSize,
         currentNodeId,
-        `spec: ${inst.cond} != 0`,
+        `spec: ${condLabelNotTaken}`,
         addMetaNode,
       );
       traceSpeculativeMeta(
         takenTarget,
-        idx + 1,
+        fallthroughIndex,
         windowSize,
         currentNodeId,
-        `spec: ${inst.cond} == 0`,
+        `spec: ${condLabelTaken}`,
         addMetaNode,
       );
       continue;
@@ -224,7 +232,7 @@ export function buildMeta(
       return;
     }
 
-    if (inst.op === "beqz") {
+    if (inst.op === "beqz" || inst.op === "bnez") {
       const takenTarget = resolveLabel(inst.target);
       walkSpec(
         takenTarget,

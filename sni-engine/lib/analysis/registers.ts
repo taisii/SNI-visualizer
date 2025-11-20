@@ -11,6 +11,7 @@ const INSTR_KEYWORDS = new Set([
   "store",
   "cmov",
   "beqz",
+  "bnez",
   "jmp",
   "spbarr",
   "skip",
@@ -75,6 +76,9 @@ function collectFromAst(regs: Set<string>, instr: Instruction) {
     case "beqz":
       addReg(instr.cond);
       break;
+    case "bnez":
+      addReg(instr.cond);
+      break;
     case "jmp":
       collectExpr(instr.target);
       break;
@@ -91,7 +95,8 @@ function collectFromText(regs: Set<string>, text: string) {
   tokens.forEach((raw, idx) => {
     const t = normalizeOperand(raw);
     if (idx === 0 && INSTR_KEYWORDS.has(t)) return;
-    if (opToken === "beqz" && idx === tokens.length - 1) return; // ラベル除外
+    if ((opToken === "beqz" || opToken === "bnez") && idx === tokens.length - 1)
+      return; // ラベル除外
     if (opToken === "jmp" && idx >= 1 && idx === tokens.length - 1) return;
     if (INSTR_KEYWORDS.has(t)) return;
     regs.add(t);

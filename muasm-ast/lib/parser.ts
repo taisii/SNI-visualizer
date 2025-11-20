@@ -51,9 +51,21 @@ export function parse(code: string): Program {
     });
   }
 
+  const needsTerminalSkip = [...labels.values()].some(
+    (pc) => pc === instructions.length,
+  );
+  if (needsTerminalSkip) {
+    instructions.push({
+      label: undefined,
+      instr: { op: "skip", text: "skip" },
+      sourceLine: lines.length,
+      pc: instructions.length,
+    });
+  }
+
   // 前方参照を解決
   for (const item of instructions) {
-    if (item.instr.op === "beqz") {
+    if (item.instr.op === "beqz" || item.instr.op === "bnez") {
       const targetPc = labels.get(item.instr.target);
       if (targetPc === undefined) {
         throw new ParseError(`未定義のラベル '${item.instr.target}'`, {
@@ -104,8 +116,13 @@ type TokenCursor = {
 };
 
 function stripLineComment(line: string): string {
-  const commentIndex = line.indexOf("//");
-  return commentIndex >= 0 ? line.slice(0, commentIndex) : line;
+  const slashIndex = line.indexOf("//");
+  const percentIndex = line.indexOf("%");
+  const idx = Math.min(
+    slashIndex === -1 ? Number.POSITIVE_INFINITY : slashIndex,
+    percentIndex === -1 ? Number.POSITIVE_INFINITY : percentIndex,
+  );
+  return idx === Number.POSITIVE_INFINITY ? line : line.slice(0, idx);
 }
 
 function parseLabel(
@@ -144,7 +161,9 @@ function parseInstruction(text: string, sourceLine: number): Instruction {
     "load",
     "store",
     "beqz",
+    "bnez",
     "jmp",
+    "cmov",
   ]);
 
   if (keywordOps.has(head)) {
@@ -158,30 +177,56 @@ function parseInstruction(text: string, sourceLine: number): Instruction {
         ensureEof(cursor, sourceLine);
         return { op: "spbarr", text: textTrimmed };
       case "load": {
-        const dest = expectIdentifier(cursor, sourceLine);
+        const dest = expectIdentifier(cursor, sourceLine, {
+          allowNumeric: true,
+        });
         expectSymbol(cursor, ",", sourceLine);
         const addr = parseExpr(cursor, sourceLine);
         ensureEof(cursor, sourceLine);
         return { op: "load", dest, addr, text: textTrimmed };
       }
       case "store": {
-        const src = expectIdentifier(cursor, sourceLine);
+        const src = expectIdentifier(cursor, sourceLine, {
+          allowNumeric: true,
+        });
         expectSymbol(cursor, ",", sourceLine);
         const addr = parseExpr(cursor, sourceLine);
         ensureEof(cursor, sourceLine);
         return { op: "store", src, addr, text: textTrimmed };
       }
       case "beqz": {
-        const cond = expectIdentifier(cursor, sourceLine);
+        const cond = expectIdentifier(cursor, sourceLine, {
+          allowNumeric: true,
+        });
         expectSymbol(cursor, ",", sourceLine);
         const target = expectIdentifier(cursor, sourceLine);
         ensureEof(cursor, sourceLine);
         return { op: "beqz", cond, target, targetPc: -1, text: textTrimmed };
       }
+      case "bnez": {
+        const cond = expectIdentifier(cursor, sourceLine, {
+          allowNumeric: true,
+        });
+        expectSymbol(cursor, ",", sourceLine);
+        const target = expectIdentifier(cursor, sourceLine);
+        ensureEof(cursor, sourceLine);
+        return { op: "bnez", cond, target, targetPc: -1, text: textTrimmed };
+      }
       case "jmp": {
         const target = parseExpr(cursor, sourceLine);
         ensureEof(cursor, sourceLine);
         return { op: "jmp", target, text: textTrimmed };
+      }
+      case "cmov": {
+        const cond = parseExpr(cursor, sourceLine);
+        expectSymbol(cursor, ",", sourceLine);
+        const dest = expectIdentifier(cursor, sourceLine, {
+          allowNumeric: true,
+        });
+        expectSymbol(cursor, "<-", sourceLine);
+        const value = parseExpr(cursor, sourceLine);
+        ensureEof(cursor, sourceLine);
+        return { op: "cmov", dest, cond, value, text: textTrimmed };
       }
       default:
         // fallthrough to assignment/cmov handling
@@ -217,13 +262,57 @@ function tokenize(text: string, sourceLine: number): Token[] {
       continue;
     }
 
-    if (ch === "<" && text[i + 1] === "-") {
-      tokens.push({ kind: "symbol", value: "<-" });
-      i += 2;
+    if (ch === "\\") {
+      i += 1;
       continue;
     }
 
-    if (",()+-*?&".includes(ch)) {
+    if (ch === "<") {
+      const next = text[i + 1];
+      if (next === "-") {
+        tokens.push({ kind: "symbol", value: "<-" });
+        i += 2;
+        continue;
+      }
+      if (next === "=") {
+        tokens.push({ kind: "symbol", value: "<=" });
+        i += 2;
+        continue;
+      }
+      tokens.push({ kind: "symbol", value: "<" });
+      i += 1;
+      continue;
+    }
+
+    if (ch === ">") {
+      const next = text[i + 1];
+      if (next === "=") {
+        tokens.push({ kind: "symbol", value: ">=" });
+        i += 2;
+        continue;
+      }
+      tokens.push({ kind: "symbol", value: ">" });
+      i += 1;
+      continue;
+    }
+
+    if (ch === "!") {
+      const next = text[i + 1];
+      if (next === "=") {
+        tokens.push({ kind: "symbol", value: "!=" });
+        i += 2;
+        continue;
+      }
+      throw new ParseError(`無効なトークン '!'`, { sourceLine, position: i });
+    }
+
+    if (ch === "=") {
+      tokens.push({ kind: "symbol", value: "=" });
+      i += 1;
+      continue;
+    }
+
+    if (",()+-*?&/".includes(ch)) {
       tokens.push({ kind: "symbol", value: ch });
       i += 1;
       continue;
@@ -232,6 +321,14 @@ function tokenize(text: string, sourceLine: number): Token[] {
     if (ch === "-" && isDigit(text[i + 1] ?? "")) {
       let j = i + 1;
       while (isDigit(text[j] ?? "")) j += 1;
+      tokens.push({ kind: "int", value: text.slice(i, j) });
+      i = j;
+      continue;
+    }
+
+    if (ch === "0" && (text[i + 1] === "x" || text[i + 1] === "X")) {
+      let j = i + 2;
+      while (/[0-9A-Fa-f]/.test(text[j] ?? "")) j += 1;
       tokens.push({ kind: "int", value: text.slice(i, j) });
       i = j;
       continue;
@@ -259,9 +356,17 @@ function tokenize(text: string, sourceLine: number): Token[] {
   return tokens;
 }
 
-function expectIdentifier(cursor: TokenCursor, sourceLine: number): string {
+function expectIdentifier(
+  cursor: TokenCursor,
+  sourceLine: number,
+  opts: { allowNumeric?: boolean } = {},
+): string {
   const token = cursor.tokens[cursor.index];
   if (token?.kind === "identifier") {
+    cursor.index += 1;
+    return token.value;
+  }
+  if (opts.allowNumeric && token?.kind === "int") {
     cursor.index += 1;
     return token.value;
   }
@@ -298,13 +403,32 @@ function parseExpr(cursor: TokenCursor, sourceLine: number): Expr {
 }
 
 const PRECEDENCE: Record<BinaryOp, number> = {
+  "=": 0,
+  "!=": 0,
+  "<": 0,
+  ">": 0,
+  "<=": 0,
+  ">=": 0,
   "&": 1,
   "+": 2,
   "-": 2,
   "*": 3,
+  "/": 3,
 };
 
-const BINARY_OPS = new Set<BinaryOp>(["&", "+", "-", "*"]);
+const BINARY_OPS = new Set<BinaryOp>([
+  "&",
+  "+",
+  "-",
+  "*",
+  "/",
+  "<",
+  ">",
+  "<=",
+  ">=",
+  "=",
+  "!=",
+]);
 
 function parseBinOp(
   cursor: TokenCursor,

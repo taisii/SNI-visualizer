@@ -29,7 +29,7 @@ MuASM プログラムに対する投機的非干渉 (SNI) 検証アルゴリズ�
 - 投機フェーズは赤系で強調し、Leak を含むセクションは警告色とアラート枠で表示。
 
 ## VCFG 生成の指針 (MuASM 基盤)
-- 命令セット: `skip`, 代入, `load`, `store`, `beqz`, `jmp`, `spbarr`, 条件付き代入 (`cmov` 相当)。
+- 命令セット: `skip`, 代入, `load`, `store`, `beqz`, `bnez`, `jmp`, `spbarr`, 条件付き代入 (`cmov` 相当)。比較演算子 (`<`, `<=`, `=`, `!=` 等) や 16進リテラルもサポート。
 - Always-Mispredict: 全分岐で誤予測パスを生成。ネスト投機を許容し、投機ウィンドウ `w` デフォルト 20（親子で残り budget を継承）。
 - エッジ種別: `ns`（通常）、`spec`（誤予測/投機）、`rollback`（復帰）。投機区間は `spec-begin/spec-end` メタノード (`type: "spec"`) を通じてマーキングし、通常命令ノードは共有する。
 
@@ -69,6 +69,19 @@ bun run dev      # http://localhost:3000 で開発サーバ
 bun run build
 bun start
 ```
+
+## MuASM ケースの実行 (CLI)
+SPECTECTOR 由来の MuASM ケースは `scripts/run-muasm.ts` から一括実行できます。引数を省略すると `muasm_case/` ディレクトリ配下の `.muasm` ファイルを順に解析し、結果を標準出力へ整形表示します。
+
+```bash
+# 例: すべてのケースを実行
+bun run muasm:run
+
+# 例: spectector_case 配下だけ解析し、投機ウィンドウを 8 に変更
+bun run muasm:run muasm_case/spectector_case --window-size 8
+```
+
+オプション一覧は `bun run scripts/run-muasm.ts --help` で確認できます。`--trace-mode single-path` を指定するとワークリストが深さ優先で処理され、`--window-size <n>` で投機ウィンドウを上書きできます。
 
 
 ## 参照ドキュメント

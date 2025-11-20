@@ -15,6 +15,13 @@ export type Instruction =
       targetPc: number;
       text: string;
     }
+  | {
+      op: "bnez";
+      cond: Register;
+      target: Identifier;
+      targetPc: number;
+      text: string;
+    }
   | { op: "jmp"; target: Expr; resolution?: JumpResolution; text: string }
   | { op: "spbarr"; text: string }
   | { op: "cmov"; dest: Register; cond: Expr; value: Expr; text: string };
