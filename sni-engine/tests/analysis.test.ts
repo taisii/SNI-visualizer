@@ -151,11 +151,11 @@ describe("analyzeVCFG", () => {
     );
     expect(n2).toBeDefined();
     const regs = n2?.state.sections.find((s) => s.id === "regs")?.data ?? {};
-    expect(regs.r.label).toBe("EqLow");
+    expect(regs.r.label).toBe("Low");
     const obsSection = n2?.state.sections.find((s) => s.id === "obsMem");
     expect(obsSection?.alert).toBe(false);
     const obsEntries = obsSection?.data ?? {};
-    expect(obsEntries["1:ptr"]?.label).toBe("EqLow");
+    expect(obsEntries["1:ptr"]?.label).toBe("Low");
   });
 
   it("unknown regs default to EqHigh", async () => {
@@ -168,7 +168,7 @@ describe("analyzeVCFG", () => {
     const regs =
       res.trace.steps[0].state.sections.find((s) => s.id === "regs")?.data ??
       {};
-    expect(regs.x.label).toBe("EqLow");
+    expect(regs.x.label).toBe("Low");
   });
 
   it("uses instructionAst to evaluate expressions", async () => {
@@ -197,7 +197,7 @@ describe("analyzeVCFG", () => {
     const regs =
       res.trace.steps[1].state.sections.find((s) => s.id === "regs")?.data ??
       {};
-    expect(regs.x.label).toBe("EqHigh");
+    expect(regs.x.label).toBe("High");
   });
 
   it("store in speculative mode flags leak via observation", async () => {
@@ -244,7 +244,7 @@ describe("analyzeVCFG", () => {
     const regs =
       res.trace.steps[1].state.sections.find((s) => s.id === "regs")?.data ??
       {};
-    expect(regs.dst.label).toBe("EqHigh");
+    expect(regs.dst.label).toBe("High");
   });
 
   it("rejects unknown instruction with AnalysisError", async () => {
@@ -407,7 +407,7 @@ describe("analyzeVCFG", () => {
       (s) => s.nodeId === "n2" && s.executionMode === "NS",
     );
     const regs = n2ns?.state.sections.find((s) => s.id === "regs")?.data ?? {};
-    expect(regs.r.label).toBe("EqLow"); // 基本経路の値に戻る
+    expect(regs.r.label).toBe("Low"); // 基本経路の値に戻る
     const obs = n2ns?.state.sections.find((s) => s.id === "obsMem");
     expect(obs?.alert).toBe(false);
   });
@@ -438,8 +438,8 @@ describe("analyzeVCFG", () => {
       (s) => s.id === "regs",
     );
     const rDetail = regsSection?.data.r.detail;
-    expect(rDetail?.ns).toBe("EqLow");
-    expect(rDetail?.sp).toBe("EqHigh");
+    expect(rDetail?.ns).toBe("Low");
+    expect(rDetail?.sp).toBe("High");
   });
 
   it("replay trace unrolls cycles up to visit cap in deterministic order", async () => {
@@ -482,8 +482,8 @@ describe("analyzeVCFG", () => {
         .filter((s) => s.nodeId === "n1")
         .pop()
         ?.state.sections.find((s) => s.id === "regs")?.data ?? {};
-    expect(regsN1.a.label).toBe("EqHigh");
-    expect(regsN1.b.label).toBe("EqHigh");
+    expect(regsN1.a.label).toBe("High");
+    expect(regsN1.b.label).toBe("High");
   });
 
   it("worklist trace logs each visit state changes in order", async () => {
@@ -505,11 +505,11 @@ describe("analyzeVCFG", () => {
     const lastN1 = res.trace.steps.filter((s) => s.nodeId === "n1").pop();
     const regsN1 =
       lastN1?.state.sections.find((s) => s.id === "regs")?.data ?? {};
-    expect(regsN1.a.label).toBe("EqHigh");
+    expect(regsN1.a.label).toBe("High");
     const lastN0 = res.trace.steps.filter((s) => s.nodeId === "n0").pop();
     const regsN0 =
       lastN0?.state.sections.find((s) => s.id === "regs")?.data ?? {};
-    expect(regsN0.z.label).toBe("EqHigh");
+    expect(regsN0.z.label).toBe("High");
   });
 
   it("uses bfs trace order by default", async () => {
@@ -571,8 +571,8 @@ describe("analyzeVCFG", () => {
     const step0 = res.trace.steps[0];
     const regs = step0.state.sections.find((s) => s.id === "regs")?.data ?? {};
     expect(Object.keys(regs).sort()).toEqual(["a", "c", "y", "z"].sort());
-    expect(regs.a.label).toBe("EqLow");
-    expect(regs.y.label).toBe("EqLow");
+    expect(regs.a.label).toBe("Low");
+    expect(regs.y.label).toBe("Low");
   });
 
   it("parses MuASM commas/<- via AST and completes without unsupported instruction", async () => {
@@ -629,21 +629,21 @@ L11:
     if (!firstN0) throw new Error("first n0 missing");
     const regsN0 = firstN0.state.sections.find((s) => s.id === "regs")?.data;
     if (!regsN0) throw new Error("regs n0 missing");
-    expect(regsN0.z.label).toBe("EqHigh");
+    expect(regsN0.z.label).toBe("High");
     const obsN0 = firstN0.state.sections.find((s) => s.id === "obsMem");
     if (!obsN0) throw new Error("obs n0 missing");
     // NS 観測も High をベースラインとして記録する
-    expect(obsN0.data["0:a"].label).toBe("EqLow"); // アドレスのみ観測のため Low 基準
+    expect(obsN0.data["0:a"].label).toBe("Low"); // アドレスのみ観測のため Low 基準
 
     const firstN1 = steps.find((s) => s.nodeId === "n1");
     if (!firstN1) throw new Error("first n1 missing");
     const regsN1 = firstN1.state.sections.find((s) => s.id === "regs")?.data;
     if (!regsN1) throw new Error("regs n1 missing");
-    expect(regsN1.a.label).toBe("EqHigh");
+    expect(regsN1.a.label).toBe("High");
     const obsN1 = firstN1.state.sections.find((s) => s.id === "obsMem");
     if (!obsN1) throw new Error("obs n1 missing");
     // 同様に 1 番目の load も High 観測となる
-    expect(obsN1.data["1:c"].label).toBe("EqLow");
+    expect(obsN1.data["1:c"].label).toBe("Low");
 
     expect(steps.every((s) => s.isViolation === false)).toBe(true);
   });

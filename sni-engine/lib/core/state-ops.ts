@@ -4,10 +4,11 @@ import {
   type RelValue,
   defaultMemRel,
   defaultRegRel,
+  joinSecurity,
 } from "./state";
 
 export function relJoin(a: RelValue, b: RelValue): RelValue {
-  return { ns: join(a.ns, b.ns), sp: join(a.sp, b.sp) };
+  return { ns: joinSecurity(a.ns, b.ns), sp: joinSecurity(a.sp, b.sp) };
 }
 
 export function getReg(state: AbsState, name: string): RelValue {
@@ -59,9 +60,10 @@ export function mergeState(
   if (mem) {
     for (const [k, v] of src.mem) {
       const cur = dst.mem.get(k) ?? defaultMemRel();
-      const n = relJoin(cur, v);
-      if (n.ns !== cur.ns || n.sp !== cur.sp) {
-        dst.mem.set(k, n);
+      const nNs = joinSecurity(cur.ns, v.ns);
+      const nSp = joinSecurity(cur.sp, v.sp);
+      if (nNs !== cur.ns || nSp !== cur.sp) {
+        dst.mem.set(k, { ns: nNs, sp: nSp });
         changed = true;
       }
     }

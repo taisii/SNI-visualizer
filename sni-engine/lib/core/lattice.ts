@@ -82,19 +82,19 @@ export function toDisplay(value: LatticeValue): DisplayValue {
   switch (value) {
     case "Bot":
       return {
-        label: "⊥",
+        label: "Bot",
         style: "neutral",
         description: "未到達または未初期化",
       };
     case "EqLow":
       return {
-        label: "EqLow",
+        label: "Low",
         style: "safe",
         description: "NS/Spec とも Low で等価",
       };
     case "EqHigh":
       return {
-        label: "EqHigh",
+        label: "High",
         style: "warning",
         description: "High だが NS/Spec で等価（許容漏洩）",
       };

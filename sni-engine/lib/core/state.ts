@@ -1,8 +1,11 @@
-import type { LatticeValue } from "./lattice";
+import { join, type LatticeValue } from "./lattice";
+
+// ns / spec の個別成分は Leak/Diverge を取り得ない 4 値に限定する
+export type SecurityPoint = "Low" | "High" | "Bot" | "Top";
 
 export type SecurityLevel = "Low" | "High";
 
-export type RelValue = { ns: LatticeValue; sp: LatticeValue };
+export type RelValue = { ns: SecurityPoint; sp: SecurityPoint };
 
 export type InitPolicy = {
   regs?: Record<string, SecurityLevel>;
@@ -59,7 +62,7 @@ export function initState(
     for (const [k, lvl] of Object.entries(policy.regs)) {
       regs.set(
         k,
-        lvl === "Low" ? defaultRegRel() : { ns: "EqHigh", sp: "EqHigh" },
+        lvl === "Low" ? defaultRegRel() : { ns: "High", sp: "High" },
       );
     }
   }
@@ -68,7 +71,7 @@ export function initState(
     for (const [k, lvl] of Object.entries(policy.mem)) {
       mem.set(
         k,
-        lvl === "Low" ? defaultMemRel() : { ns: "EqHigh", sp: "EqHigh" },
+        lvl === "Low" ? defaultMemRel() : { ns: "High", sp: "High" },
       );
     }
   }
@@ -85,9 +88,47 @@ export function defaultLattice(): LatticeValue {
 }
 
 export function defaultRegRel(): RelValue {
-  return { ns: "EqLow", sp: "EqLow" };
+  return { ns: "Low", sp: "Low" };
 }
 
 export function defaultMemRel(): RelValue {
-  return { ns: "EqHigh", sp: "EqHigh" };
+  return { ns: "High", sp: "High" };
+}
+
+// --- SecurityPoint と LatticeValue の橋渡し ---
+export function securityToLattice(v: SecurityPoint): LatticeValue {
+  switch (v) {
+    case "Low":
+      return "EqLow";
+    case "High":
+      return "EqHigh";
+    case "Bot":
+      return "Bot";
+    case "Top":
+    default:
+      return "Top";
+  }
+}
+
+export function latticeToSecurity(v: LatticeValue): SecurityPoint {
+  switch (v) {
+    case "EqLow":
+      return "Low";
+    case "EqHigh":
+      return "High";
+    case "Bot":
+      return "Bot";
+    case "Top":
+    default:
+      // Leak/Diverge など関係専用の値は Top 扱いで潰す
+      return "Top";
+  }
+}
+
+export function joinSecurity(a: SecurityPoint, b: SecurityPoint): SecurityPoint {
+  return latticeToSecurity(join(securityToLattice(a), securityToLattice(b)));
+}
+
+export function isHighLike(v: SecurityPoint): boolean {
+  return v === "High" || v === "Top";
 }

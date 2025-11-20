@@ -65,8 +65,8 @@ describe("join table", () => {
 });
 
 describe("toDisplay", () => {
-  it("maps Bot to neutral symbol", () => {
-    expect(toDisplay("Bot")).toMatchObject({ label: "⊥", style: "neutral" });
+  it("maps Bot to neutral label", () => {
+    expect(toDisplay("Bot")).toMatchObject({ label: "Bot", style: "neutral" });
   });
   it("maps Leak to danger", () => {
     expect(toDisplay("Leak").style).toBe("danger");

@@ -8,7 +8,7 @@ export function evalExpr(state: AbsState, expr: Expr): RelValue {
     case "reg":
       return getReg(state, expr.name);
     case "int":
-      return { ns: "EqLow", sp: "EqLow" };
+      return { ns: "Low", sp: "Low" };
     case "binop":
       return relJoin(evalExpr(state, expr.left), evalExpr(state, expr.right));
     default:

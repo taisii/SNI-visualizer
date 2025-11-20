@@ -91,6 +91,8 @@ export type AbstractState = {
   sections: StateSection[];
 };
 
+export type DisplaySecurityPoint = "Low" | "High" | "Bot" | "Top";
+
 export type StateSection = {
   id: string;
   title: string;
@@ -114,8 +116,7 @@ export type DisplayValue = {
   description?: string;
   // 関係的値の詳細表示用（任意）
   detail?: {
-    ns: DisplayLattice;
-    sp: DisplayLattice;
-    join: DisplayLattice;
+    ns: DisplaySecurityPoint;
+    sp: DisplaySecurityPoint;
   };
 };

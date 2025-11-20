@@ -1,5 +1,6 @@
 import { join, toDisplay } from "../core/lattice";
 import type { AbsState } from "../core/state";
+import { securityToLattice } from "../core/state";
 
 export function stateToSections(state: AbsState) {
   const regs: Record<string, ReturnType<typeof toDisplay>> = {};
@@ -8,17 +9,17 @@ export function stateToSections(state: AbsState) {
   const obsCtrl: Record<string, ReturnType<typeof toDisplay>> = {};
 
   for (const [k, v] of state.regs) {
-    const joined = join(v.ns, v.sp);
+    const joined = join(securityToLattice(v.ns), securityToLattice(v.sp));
     regs[k] = {
       ...toDisplay(joined),
-      detail: { ns: v.ns, sp: v.sp, join: joined },
+      detail: { ns: v.ns, sp: v.sp },
     };
   }
   for (const [k, v] of state.mem) {
-    const joined = join(v.ns, v.sp);
+    const joined = join(securityToLattice(v.ns), securityToLattice(v.sp));
     mem[k] = {
       ...toDisplay(joined),
-      detail: { ns: v.ns, sp: v.sp, join: joined },
+      detail: { ns: v.ns, sp: v.sp },
     };
   }
   for (const [k, v] of state.obsMem) obsMem[String(k)] = toDisplay(v);

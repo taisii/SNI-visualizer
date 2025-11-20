@@ -1,7 +1,14 @@
 import type { GraphNode, TraceStep } from "@/lib/analysis-schema";
 import type { Instruction, Expr } from "@/muasm-ast";
-import { join, type LatticeValue } from "../core/lattice";
-import { cloneState, type AbsState, type RelValue } from "../core/state";
+import type { LatticeValue } from "../core/lattice";
+import {
+  cloneState,
+  type AbsState,
+  type RelValue,
+  joinSecurity,
+  isHighLike,
+  securityToLattice,
+} from "../core/state";
 import { getMem, getReg, setMem, setReg } from "../core/state-ops";
 import {
   updateCtrlObsNS,
@@ -57,7 +64,10 @@ export function applyInstruction(
       kind === "reg" ? setReg(next, name, value) : setMem(next, name, value);
     } else {
       const prev = kind === "reg" ? getReg(next, name) : getMem(next, name);
-      const updated: RelValue = { ns: prev.ns, sp: join(prev.sp, value.sp) };
+      const updated: RelValue = {
+        ns: prev.ns,
+        sp: joinSecurity(prev.sp, value.sp),
+      };
       kind === "reg"
         ? setReg(next, name, updated)
         : setMem(next, name, updated);
@@ -85,18 +95,12 @@ export function applyInstruction(
       const lAddr = evalExpr(state, ast.addr);
       const lVal = getMemByExpr(state, ast.addr);
       const v: RelValue = {
-        ns: join(lVal.ns, lAddr.ns),
-        sp: join(lVal.sp, lAddr.sp),
+        ns: joinSecurity(lVal.ns, lAddr.ns),
+        sp: joinSecurity(lVal.sp, lAddr.sp),
       };
-      const observed =
-        executionMode === "NS"
-          ? lAddr.ns === "EqHigh" || lAddr.ns === "Leak" || lAddr.ns === "Top"
-            ? "EqHigh"
-            : "EqLow"
-          : lAddr.sp === "EqHigh" || lAddr.sp === "Leak" || lAddr.sp === "Top"
-            ? "EqHigh"
-            : "EqLow";
-      observeMem(observed);
+      const observedPoint =
+        executionMode === "NS" ? lAddr.ns : lAddr.sp;
+      observeMem(isHighLike(observedPoint) ? "EqHigh" : "EqLow");
       setValue("reg", ast.dest, v);
       break;
     }
@@ -104,18 +108,12 @@ export function applyInstruction(
       const lAddr = evalExpr(state, ast.addr);
       const lVal = getReg(state, ast.src);
       const v: RelValue = {
-        ns: join(lVal.ns, lAddr.ns),
-        sp: join(lVal.sp, lAddr.sp),
+        ns: joinSecurity(lVal.ns, lAddr.ns),
+        sp: joinSecurity(lVal.sp, lAddr.sp),
       };
-      const observed =
-        executionMode === "NS"
-          ? lAddr.ns === "EqHigh" || lAddr.ns === "Leak" || lAddr.ns === "Top"
-            ? "EqHigh"
-            : "EqLow"
-          : lAddr.sp === "EqHigh" || lAddr.sp === "Leak" || lAddr.sp === "Top"
-            ? "EqHigh"
-            : "EqLow";
-      observeMem(observed);
+      const observedPoint =
+        executionMode === "NS" ? lAddr.ns : lAddr.sp;
+      observeMem(isHighLike(observedPoint) ? "EqHigh" : "EqLow");
       setValue("mem", defaultMemLabel(ast.addr), v);
       break;
     }
@@ -131,9 +129,9 @@ export function applyInstruction(
       const level = getReg(state, ast.cond);
       const observed = executionMode === "NS" ? level.ns : level.sp;
       if (executionMode === "NS") {
-        updateCtrlObsNS(next, ctrlObsId, observed);
+        updateCtrlObsNS(next, ctrlObsId, securityToLattice(observed));
       } else {
-        updateCtrlObsSpec(next, ctrlObsId, observed);
+        updateCtrlObsSpec(next, ctrlObsId, securityToLattice(observed));
       }
       break;
     }
@@ -159,5 +157,5 @@ function getJoinOfCondAndVal(state: AbsState, cond: Expr, value: Expr): RelValue
 }
 
 function joinPair(a: RelValue, b: RelValue): RelValue {
-  return { ns: join(a.ns, b.ns), sp: join(a.sp, b.sp) };
+  return { ns: joinSecurity(a.ns, b.ns), sp: joinSecurity(a.sp, b.sp) };
 }

@@ -26,6 +26,35 @@ const badgeColors: Record<StateSection["data"][string]["style"], string> = {
   info: "bg-blue-100 text-blue-800",
 };
 
+const makeBadgeClass = (
+  style: StateSection["data"][string]["style"],
+  size: "normal" | "small" = "normal",
+) =>
+  `min-w-[56px] rounded px-2 py-0.5 text-center font-semibold ${
+    size === "small" ? "text-[10px]" : "text-[11px]"
+  } ${badgeColors[style]}`;
+
+const detailStyleOf = (
+  value: string | undefined,
+): StateSection["data"][string]["style"] => {
+  switch (value) {
+    case "Low":
+    case "EqLow":
+      return "safe";
+    case "High":
+    case "EqHigh":
+      return "warning";
+    case "Leak":
+    case "Top":
+      return "danger";
+    case "Diverge":
+      return "info";
+    case "Bot":
+    default:
+      return "neutral";
+  }
+};
+
 export function StateViewer({ state, graph }: Props) {
   const [openValuesBySection, setOpenValuesBySection] = useState<
     Record<string, string[]>
@@ -204,8 +233,15 @@ export function StateViewer({ state, graph }: Props) {
                   >
                     {entries.map(
                       ({ key, value, displayKey, hasDetail, itemValue }) => {
-                        const badgeClass = `min-w-[56px] rounded px-2 py-0.5 text-center text-[11px] font-semibold ${badgeColors[value.style]}`;
-
+                        const isMismatched =
+                          value.detail && value.detail.ns !== value.detail.sp;
+                        const summaryStyle = isMismatched
+                          ? "danger"
+                          : value.style;
+                        const summaryLabel = isMismatched
+                          ? "Danger"
+                          : value.label;
+                        const badgeClass = makeBadgeClass(summaryStyle);
                         if (!hasDetail) {
                           return (
                             <div
@@ -216,7 +252,7 @@ export function StateViewer({ state, graph }: Props) {
                                 {displayKey}
                               </span>
                               <span className="flex-1" />
-                              <span className={badgeClass}>{value.label}</span>
+                              <span className={badgeClass}>{summaryLabel}</span>
                             </div>
                           );
                         }
@@ -232,12 +268,16 @@ export function StateViewer({ state, graph }: Props) {
                                 {displayKey}
                               </span>
                               <span className="flex-1" />
-                              <span className={badgeClass}>{value.label}</span>
+                              <span className={badgeClass}>{summaryLabel}</span>
                             </AccordionTrigger>
                             <AccordionContent className="px-2 pb-2">
-                              <div className="grid grid-cols-3 gap-2 text-[10px] text-neutral-700">
-                                {(["ns", "sp", "join"] as const).map((k) => {
+                              <div className="grid grid-cols-2 gap-2 text-[10px] text-neutral-700">
+                                {(["ns", "sp"] as const).map((k) => {
                                   const val = value.detail?.[k];
+                                  const detailClass = makeBadgeClass(
+                                    detailStyleOf(val),
+                                    "small",
+                                  );
                                   return (
                                     <div
                                       key={k}
@@ -246,14 +286,7 @@ export function StateViewer({ state, graph }: Props) {
                                       <span className="font-mono text-[10px] text-neutral-600">
                                         {k}:
                                       </span>
-                                      <span
-                                        className={badgeClass.replace(
-                                          "text-[11px]",
-                                          "text-[10px]",
-                                        )}
-                                      >
-                                        {val}
-                                      </span>
+                                      <span className={detailClass}>{val}</span>
                                     </div>
                                   );
                                 })}
@@ -265,7 +298,7 @@ export function StateViewer({ state, graph }: Props) {
                     )}
                   </Accordion>
                 );
-              })()}
+  })()}
             </div>
           </div>
         ))}
