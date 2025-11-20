@@ -283,6 +283,38 @@ describe("analyzeVCFG", () => {
     expect(step?.isViolation).toBe(true);
   });
 
+  it("warns (but does not error) when maxSpeculationDepth prevents entering a new context", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "skip"),
+        specMetaNode("sbOuter", -1, "spec-begin outer", "begin", "ctxOuter"),
+        baseNode("outerWork", 1, "spec", "skip"),
+        specMetaNode("sbInner", -2, "spec-begin inner", "begin", "ctxInner"),
+        baseNode("innerWork", 2, "spec", "skip"),
+      ],
+      edges: [
+        edge("n0", "sbOuter", "spec"),
+        edge("sbOuter", "outerWork", "spec"),
+        edge("outerWork", "sbInner", "spec"),
+        edge("sbInner", "innerWork", "spec"),
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, { maxSpeculationDepth: 1 });
+
+    expect(res.result).toBe("Secure");
+    const visited = res.trace.steps.map((s) => s.nodeId);
+    expect(visited).not.toContain("innerWork");
+    expect(res.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "MaxSpeculationDepth",
+          detail: expect.objectContaining({ contextId: "ctxInner" }),
+        }),
+      ]),
+    );
+  });
+
   it("rollback しても外側の投機文脈があれば Speculative を維持する", async () => {
     const graph: StaticGraph = {
       nodes: [

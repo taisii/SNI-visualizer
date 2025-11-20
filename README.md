@@ -16,7 +16,7 @@ MuASM プログラムに対する投機的非干渉 (SNI) 検証アルゴリズ�
 
 ## 共通インターフェース (AnalysisResult 抜粋)
 型定義の単一出典は `lib/analysis-schema/index.ts`。A/B/C すべてここを import する。
-- `schemaVersion`: `"1.0.0"`
+- `schemaVersion`: `"1.1.0"`
 - `graph: StaticGraph` — meta 仕様に合わせ、通常命令ノードは共有しつつ `spec-begin/spec-end` メタノード（`type: "spec"`）と `rollback` エッジで投機区間を表現。
 - `trace: ExecutionTrace` — `steps[{stepId,nodeId,description,executionMode,state,isViolation}]`
 - `result`: `"Secure"` \| `"SNI_Violation"`

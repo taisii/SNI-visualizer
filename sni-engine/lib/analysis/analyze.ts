@@ -1,5 +1,6 @@
 import type {
   AnalysisResult,
+  AnalysisWarning,
   ExecutionTrace,
   GraphNode,
   StaticGraph,
@@ -34,11 +35,13 @@ export type AnalyzeOptions = {
   entryNodeId?: string;
   maxSteps?: number;
   traceMode?: TraceMode;
+  maxSpeculationDepth?: number;
 };
 
 const DEFAULT_CAP = 10_000;
 const DEFAULT_MAX_STEPS = 10_000;
 const DEFAULT_TRACE_MODE: TraceMode = "bfs";
+const DEFAULT_MAX_SPECULATION_DEPTH = 20;
 
 type ContextStack = readonly string[];
 
@@ -74,6 +77,7 @@ export async function analyzeVCFG(
   opts: AnalyzeOptions = {},
 ): Promise<AnalysisResult> {
   const traceMode = opts.traceMode ?? DEFAULT_TRACE_MODE;
+  const warnings: AnalysisWarning[] = [];
   let graph: StaticGraph;
   try {
     graph = validateGraph(rawGraph);
@@ -89,10 +93,14 @@ export async function analyzeVCFG(
         message: err instanceof Error ? err.message : String(err),
         detail: err,
       },
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
   const iterationCap = opts.iterationCap ?? DEFAULT_CAP;
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
+  const maxSpeculationDepth =
+    opts.maxSpeculationDepth ?? DEFAULT_MAX_SPECULATION_DEPTH;
+  const speculationDepthWarned = new Set<string>();
   const nodeMap = new Map(graph.nodes.map((n) => [n.id, n] as const));
   const usedRegs = collectRegisterNames(graph);
   const entryNode = getEntryNode(graph, opts.entryNodeId, nodeMap);
@@ -170,6 +178,7 @@ export async function analyzeVCFG(
           message: err instanceof Error ? err.message : String(err),
           detail: err,
         },
+        warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
     states.get(nodeId)?.set(modeKey, outState);
@@ -187,6 +196,7 @@ export async function analyzeVCFG(
           message: "maxSteps exceeded",
           detail: { maxSteps },
         },
+        warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
     const violation = stateHasViolation(outState);
@@ -206,6 +216,7 @@ export async function analyzeVCFG(
         trace: { steps: stepLogs } as ExecutionTrace,
         traceMode,
         result: "SNI_Violation",
+        warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
 
@@ -233,6 +244,29 @@ export async function analyzeVCFG(
           targetNode && targetNode.specContext?.phase === "begin"
             ? targetNode.specContext.id
             : undefined;
+
+        if (
+          contextIdToPush &&
+          stack.length >= maxSpeculationDepth
+        ) {
+          const warnKey = `${contextIdToPush}:${stack.length}`;
+          if (!speculationDepthWarned.has(warnKey)) {
+            speculationDepthWarned.add(warnKey);
+            warnings.push({
+              type: "MaxSpeculationDepth",
+              message: `maxSpeculationDepth(${maxSpeculationDepth}) reached before entering speculative context ${contextIdToPush}`,
+              detail: {
+                contextId: contextIdToPush,
+                nodeId,
+                maxSpeculationDepth,
+                stackDepth: stack.length,
+              },
+            });
+          }
+          // 投機深さ制限に達している場合は、新たな投機コンテキストには入らない
+          continue;
+        }
+
         nextStack = pushContext(stack, contextIdToPush);
       } else if (e.type === "rollback") {
         const popped = popContext(stack, node.specContext?.id);
@@ -279,6 +313,7 @@ export async function analyzeVCFG(
           message: "iterationCap exceeded",
           detail: { iterationCap },
         },
+        warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
   }
@@ -290,6 +325,7 @@ export async function analyzeVCFG(
     trace: { steps: stepLogs } as ExecutionTrace,
     traceMode,
     result: finalViolation ? "SNI_Violation" : "Secure",
+    warnings: warnings.length > 0 ? warnings : undefined,
   };
   return result;
 }

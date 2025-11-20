@@ -5,7 +5,7 @@
 - 根拠: `app/(analysis)/page.tsx`・`app/(analysis)/features/*`・`lib/analysis-engine/index.ts`・`lib/analysis-schema/index.ts`
 
 本ドキュメントは「いま動いている Web UI が何をしているか」を実装コードから逆算してまとめた現行仕様書である。  
-理論仕様や将来計画は含めず、UI が依存するデータ構造と画面挙動を記述する。VCFG ビルダーは meta 版のみを提供しており、その仕様やオプションを実装ベースで反映する。
+理論仕様や将来計画は含めず、UI が依存するデータ構造と画面挙動を記述する。VCFG ビルダーは meta 版のみを提供しており、その仕様やオプションを実装ベースで反映する。プロジェクト全体の俯瞰は `doc/project.md` を参照。
 
 ## 0. 役割と全体像
 
@@ -28,26 +28,28 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 - `policy`: `{ regs?: Record<string,"Low"|"High">; mem?: Record<string,"Low"|"High"> }`
 - `entryRegs`: 解析開始時に EqLow で初期化するレジスタ名の配列
 - `entryNodeId`: 開始ノード ID（省略時は先頭ノード）
-- `iterationCap` / `maxSteps`: 不動点計算とトレース生成の打ち切り上限
+- `iterationCap` / `maxSteps`: 不動点計算とトレース生成の打ち切り上限（どちらもデフォルト 10,000）
+- `maxSpeculationDepth`: 投機コンテキストのネスト深さ上限（デフォルト 20）。閾値を超えると解析は継続するが、該当 `spec-begin` へ入らず警告を発行する。
 - VCFG ビルダー向けオプション（UI も透過的に渡す）:
   - `windowSize`: 投機ウィンドウサイズ（デフォルト 20）
 
 ### 1.2 AnalysisResult スキーマ（UI が前提する形）
 
-- 互換キー: `schemaVersion = "1.0.0"`
+- 互換キー: `schemaVersion = "1.1.0"`
 - `graph: StaticGraph` — ノード/エッジと種類（ns/spec/rollback）。VCFG は meta 表現のみで、NS ノードを共有し分岐ごとに `spec-begin/spec-end` メタノードを spec エッジで挟む（spec ノードは meta ノードのみ生成）。  
 - `trace.steps[]` — 各ステップの `{ stepId, nodeId, description, executionMode, state, isViolation }`。  
 - `state.sections[]` — 汎用セクション配列。`data` は任意キーに `DisplayValue{ label, style }` を紐付ける。`alert` でセクション単位の強調可。  
 - `result` — `"Secure"` または `"SNI_Violation"` をヘッダーでバッジ表示。  
 - `traceMode` — `"bfs"`（到達順）または `"single-path"`（1 経路を連続して展開）。UI デフォルトは後者。  
-- `error?` — `type/message` を持つ。Toast で surfaced し、画面は未解析状態に戻す。
+- `error?` — `type/message` を持つ。Toast で surfaced し、トレースが 1 件以上あれば結果を保持したまま最後のステップを表示する。トレースが空の場合のみ結果を破棄し、画面を未解析状態へ戻す。
+- `warnings?` — 致命的ではないが通知したい事項の配列。現状は `MaxSpeculationDepth` のみをサポートし、UI はバッジと Toast でユーザーに周知する。
 
 スキーマの一次ソースは `lib/analysis-schema/index.ts` を参照し、UI コードは同型にのみ依存する。
 
 ### 1.3 トレース生成とワークリスト
 
 - ストリーミング方式: 不動点計算ループ中に各ノード遷移で `trace.steps` を逐次追加する。再実行による再生成は行わない。  
-- 上限ガード: `iterationCap`（デフォルト 10,000）と `maxSteps`（デフォルト 500）の二重上限を持ち、どちらかに到達すると `AnalysisError` を設定して打ち切る。  
+- 上限ガード: `iterationCap`（デフォルト 10,000）と `maxSteps`（デフォルト 10,000）の二重上限を持ち、どちらかに到達すると `AnalysisError` を設定して打ち切る。  
 - ワークリスト順序: `traceMode` で切り替え。`bfs` は FIFO（到達順）、`single-path` は LIFO により同一経路を優先的に辿る。`traceMode` は結果にメタデータとして保存する。
 - 観測 ID の規約: メモリ観測は `"pc:addr"`、制御観測は分岐 PC を文字列化し必要に応じて `"pc:tag"` を付与する。抽象位置 `AbsLoc` は変数名文字列で表現する。
 
@@ -62,7 +64,7 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 
 ### 2.2 コンポーネント仕様
 
-- **Header**: 解析結果バッジ (`Secure` / `SNI Violation`) または「未解析」表示。  
+- **Header**: 解析結果バッジ (`Secure` / `SNI Violation`) または「未解析」表示。`warnings` が返る場合は警告ピルを追加し、`MaxSpeculationDepth` では「投機ネスト上限により一部探索停止」のサブテキストを表示する。  
 - **ControlPanel**:  
   - 「解析を実行」: 押下で `analyze` 呼び出し。処理中はボタン disabled。  
   - 「リセット」: 結果・ステップ・Auto Play を初期化。  
@@ -72,7 +74,7 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 - **CodeEditor**: MuASM テキストエリアを単一 Accordion で折りたたみ可能にしたもの。デモコードリセットボタン付き。入力変更はソースだけを更新し、解析結果は保持したまま。  
 - **VCFGView**: React Flow で VCFG を描画。`type` で色分け（ns=青、spec=橙、rollback=赤）し、`activeNodeId` を太枠＋淡青背景で強調。VCFG は meta 仕様で生成されるため、NS ノード共有＋ spec-begin/end メタノード構造を描画する。データが無い場合はプレースホルダ。左ペイン下部に配置し、`flex-1` + `min-h` で列の残り高さを占有する。  
 - **StateViewer**: `sections` を反復描画。`alert` で赤枠＋ALERT バッジ、`DisplayValue.style` を色付きバッジで表示。データが無い場合はプレースホルダ。右ペイン下部に配置。
-- **Toast (sonner)**: 解析失敗時にエラー文言を表示し、「再解析」アクションで再実行できる。
+- **Toast (sonner)**: 解析失敗時にエラー文言を表示し、「再解析」アクションで再実行できる。`warnings` は Warning Toast で告知し、JSON 文字列化したシグネチャで重複送出を抑止する。
 
 ### 2.3 レイアウト概要（現行実装の意図）
 
@@ -94,12 +96,12 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 
 - React state: `source`, `result`, `currentStep`, `isAutoPlay`, `isLoading`。  
 - `deriveControlState(result, currentStep)` で Prev/Next 活性と最大ステップを計算。  
-- 解析成功時に `currentStep` を 0 にリセット。結果消失時はステップも 0 に戻す防御を実装。
+- 解析成功時に `currentStep` を 0 にリセット。結果消失時はステップも 0 に戻す防御を実装。`AnalysisResult.error` が返ってもトレースが残る場合は `result` を保持し、`currentStep` を末尾へジャンプさせる。
 
 ### 2.4 ユーザーフロー（現行）
 
 1. 初期表示: デモコード入り、結果なし → 右ペインはプレースホルダ。  
-2. 解析実行: 成功でステップ 0 を表示。失敗で Toast（結果は破棄）。  
+2. 解析実行: 成功でステップ 0 を表示。`AnalysisError` が返っても部分結果があれば最後のステップまでジャンプし Toast で通知、完全失敗時のみ結果を破棄。  
 3. ステップ送り: Prev/Next/Auto Play で `trace.steps` を遷移し、VCFG/State を同期表示。  
 4. 違反検出 or 最終ステップ: Auto Play が自動停止。手動 Next は末尾で無効化。  
 5. リセット: 結果とステップを初期化し、入力のみ維持。
@@ -108,8 +110,8 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 
 - コード編集時も結果は保持されるため、ソースとトレースが不整合になりうる（解析の再実行は手動）。  
 - ポリシー入力 UI は未実装。`analyze` もポリシー引数なしで呼び出している。  
-- テスト（Vitest/Playwright）や Storybook は未整備。  
+- UI の自動テストは `app/(analysis)/features/visualization/*.test.ts` のユニットテストのみで、Playwright などによる E2E や Storybook は未整備。  
 
-補足: 解析失敗時は Toast を表示しつつ `setResult(null)` で結果を破棄し、右ペインはプレースホルダ表示に戻るのが現行挙動。
+補足: 解析失敗時は Toast でエラー内容を通知し、Partial Trace がある場合は結果を保持して最後のステップを表示する。完全失敗のみ `setResult(null)` で未解析に戻る。
 
 以上を現行挙動の「事実」として固定し、今後の改善は別紙 `web-plan.md` に記載する。

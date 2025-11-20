@@ -24,7 +24,7 @@ describe("analysis-engine analyze", () => {
     const graph: StaticGraph = { nodes: [], edges: [] };
     buildVCFGMock.mockReturnValue(graph);
     analyzeVCFGMock.mockResolvedValue({
-      schemaVersion: "1.0.0",
+      schemaVersion: "1.1.0",
       graph,
       trace: { steps: [] },
       traceMode: "single-path",
@@ -45,7 +45,7 @@ describe("analysis-engine analyze", () => {
     const graph: StaticGraph = { nodes: [], edges: [] };
     buildVCFGMock.mockReturnValue(graph);
     analyzeVCFGMock.mockResolvedValue({
-      schemaVersion: "1.0.0",
+      schemaVersion: "1.1.0",
       graph,
       trace: { steps: [] },
       traceMode: "bfs",

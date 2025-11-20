@@ -29,6 +29,11 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [traceMode, setTraceMode] = useState<TraceMode>("single-path");
   const pendingBfsRetryRef = useRef(false);
+  const lastWarningsToastRef = useRef<string | null>(null);
+
+  const resetWarningsToast = () => {
+    lastWarningsToastRef.current = null;
+  };
 
   const activeStep = useMemo(
     () => result?.trace.steps.at(currentStep) ?? null,
@@ -37,6 +42,12 @@ export default function Home() {
   const controlState = useMemo(
     () => deriveControlState(result, currentStep),
     [result, currentStep],
+  );
+
+  const warnings = result?.warnings ?? null;
+  const warningsSignature = useMemo(
+    () => (warnings ? JSON.stringify(warnings) : null),
+    [warnings],
   );
 
   useEffect(() => {
@@ -72,6 +83,7 @@ export default function Home() {
   };
 
   const handleAnalyze = async (modeOverride?: TraceMode) => {
+    resetWarningsToast();
     setIsLoading(true);
     setIsAutoPlay(false);
     try {
@@ -95,6 +107,7 @@ export default function Home() {
           setCurrentStep(analysis.trace.steps.length - 1);
         } else {
           setResult(null);
+          resetWarningsToast();
         }
 
         toast.error(analysis.error.message ?? "解析でエラーが発生しました", {
@@ -137,6 +150,7 @@ export default function Home() {
         message,
       });
       setResult(null);
+      resetWarningsToast();
     } finally {
       setIsLoading(false);
       pendingBfsRetryRef.current = false;
@@ -163,6 +177,7 @@ export default function Home() {
 
   const handleReset = () => {
     setResult(null);
+    resetWarningsToast();
     setAnalysisError(undefined);
     setCurrentStep(0);
     setIsAutoPlay(false);
@@ -177,9 +192,45 @@ export default function Home() {
     }
   }, [result, currentStep]);
 
+  useEffect(() => {
+    if (!warnings || warnings.length === 0) {
+      lastWarningsToastRef.current = null;
+      return;
+    }
+    if (warningsSignature && warningsSignature === lastWarningsToastRef.current) {
+      return;
+    }
+    lastWarningsToastRef.current = warningsSignature;
+
+    const depthWarnings = warnings.filter(
+      (warning) => warning.type === "MaxSpeculationDepth",
+    );
+    if (depthWarnings.length > 0) {
+      const contexts = depthWarnings
+        .map((w) => w.detail?.contextId)
+        .filter((id): id is string => Boolean(id));
+      const uniqueContexts = Array.from(new Set(contexts));
+      const contextLabel = uniqueContexts.slice(0, 3).join(", ");
+      const suffix = uniqueContexts.length > 3 ? " ほか" : "";
+      const depthValue = depthWarnings[0]?.detail?.maxSpeculationDepth;
+      toast.warning("投機ネスト上限に達しました", {
+        description: `maxSpeculationDepth=${depthValue ?? "?"} を超えたため、一部の spec-begin をスキップしています。${
+          contextLabel ? `影響コンテキスト: ${contextLabel}${suffix}` : ""
+        }`.trim(),
+      });
+      return;
+    }
+
+    toast.warning("解析に警告があります");
+  }, [warnings, warningsSignature]);
+
   return (
     <div className="flex min-h-screen flex-col bg-neutral-100 text-neutral-900">
-      <Header result={result?.result ?? null} error={analysisError} />
+      <Header
+        result={result?.result ?? null}
+        error={analysisError}
+        warnings={warnings ?? undefined}
+      />
       <Toaster richColors position="bottom-right" />
       <main className="grid flex-1 grid-cols-1 gap-4 p-6 lg:grid-cols-2">
         <section className="flex flex-col gap-3 lg:min-h-[calc(100vh-140px)]">

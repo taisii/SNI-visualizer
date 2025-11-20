@@ -1,6 +1,6 @@
 import type { Instruction as MuasmInstruction } from "@/muasm-ast";
 
-export const ANALYSIS_SCHEMA_VERSION = "1.0.0" as const;
+export const ANALYSIS_SCHEMA_VERSION = "1.1.0" as const;
 
 export type TraceMode = "bfs" | "single-path";
 
@@ -17,12 +17,25 @@ export type AnalysisResult = {
   result: "Secure" | "SNI_Violation";
   /** 解析エラー情報（UI は message をユーザー向けに表示） */
   error?: AnalysisError;
+  /** エラーではないが UI で伝えたい注意事項 */
+  warnings?: AnalysisWarning[];
 };
 
 export type AnalysisError = {
   type: "ParseError" | "AnalysisError" | "InternalError";
   message: string;
   detail?: unknown;
+};
+
+export type AnalysisWarning = {
+  type: "MaxSpeculationDepth";
+  message: string;
+  detail?: {
+    contextId?: string;
+    nodeId?: string;
+    maxSpeculationDepth?: number;
+    stackDepth?: number;
+  };
 };
 
 // ---------- Graph ----------
