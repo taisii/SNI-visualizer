@@ -18,10 +18,10 @@ MuASM プログラムに対する投機的非干渉 (SNI) 検証アルゴリズ�
 型定義の単一出典は `lib/analysis-schema/index.ts`。A/B/C すべてここを import する。
 - `schemaVersion`: `"1.1.0"`
 - `graph: StaticGraph` — meta 仕様に合わせ、通常命令ノードは共有しつつ `spec-begin/spec-end` メタノード（`type: "spec"`）と `rollback` エッジで投機区間を表現。
-- `trace: ExecutionTrace` — `steps[{stepId,nodeId,description,executionMode,state,isViolation}]`
+- `trace: ExecutionTrace` — `steps[{stepId,nodeId,description,executionMode,state,isViolation}]` を**解析ループ中に逐次追加**し、そのまま返却する（後追いリプレイはしない）。
 - `result`: `"Secure"` \| `"SNI_Violation"`
 - `error?`: `{type,message,detail?}`
-- `AbstractState.sections`: 任意セクション配列（例: regs, mem, obs）。`DisplayValue {label, style}` で色付け。
+- `AbstractState.sections`: 任意セクション配列（例: regs, mem, obsMem, obsCtrl）。`DisplayValue {label, style}` で色付け。
 
 ## Webアプリ UI要点
 - 左ペイン: MuASM エディタ + 解析/再生コントロール（Prev/Next/Reset/Auto Play）。
@@ -35,8 +35,8 @@ MuASM プログラムに対する投機的非干渉 (SNI) 検証アルゴリズ�
 
 ## 抽象解釈コアの要点
 - 格子値: `Bot < EqLow < EqHigh < Diverge < Leak < Top`。`Leak`/`Top` を含む観測で違反判定。
-- ワークリストによる固定点計算 + `iterationCap = 10,000`。終了後に「Replay」方式で ExecutionTrace を生成。
-- 3 マップ \(R^\#, \Gamma^\#, \mathcal{O}^\#\) を追跡し、Spec エッジでは NS を保持したまま Spec 側のみ更新して差分（Leak/Diverge）を検出。
+- ワークリストによる固定点計算 + `iterationCap = 10,000`。各遷移ごとに `trace.steps` を即時追記し、走査完了時点のログをそのまま返す。
+- 4 マップ \(R^\#, \Gamma^\#, \mathcal{O}^\#, \mathcal{J}^\#\) を追跡し、Spec エッジでは NS を保持したまま Spec 側のみ更新して差分（Leak/Diverge）を検出。
 
 ## リポジトリ構造（現行）
 ```

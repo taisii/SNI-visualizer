@@ -63,10 +63,10 @@ type AbsState = {
   - 観測点キー形式（アドレスのみを観測）:
     - `load dst, addr`:  `"${pc}:${addr}"`
     - `store src, addr`: `"${pc}:${addr}"`
-- `obsCtrl`: 制御フロー（`beqz` / `jmp`）ごとの観測履歴  
+- `obsCtrl`: 制御フロー（`beqz/bnez` / `jmp`）ごとの観測履歴  
   - 観測点キー形式:
     - 条件値: `String(pc)`（例: `"12"`）
-    - 分岐方向: `"${pc}:dir"` (`taken`=EqLow / `not-taken`=EqHigh として符号化)
+    - ジャンプターゲット: `"${pc}:target:${expr}"`（`expr` はターゲット式の文字列表現）
 
 UI に渡す際は、`obsMem` と `obsCtrl` をそれぞれ
 
@@ -117,7 +117,7 @@ Bot < EqLow < EqHigh < Diverge < Leak < Top
 - `store src addr`
 - `cmov dst cond src`
 - `spbarr`
-- `beqz` / `jmp`（制御フローのみ、状態は変化させない）
+- `beqz` / `bnez` / `jmp`（制御フローのみ、状態は変化させない）
 
 ### 3.1 NS / Spec の状態更新
 
@@ -167,15 +167,16 @@ updateMemObsSpec(state, obsId, observed) {
 - 同じ観測点で Spec 側が High を観測しても、既に `EqHigh` であれば新規漏洩とはみなさない。
 - NS では Low / ⊥ だった観測点で、Spec 側が High を観測した場合に `Leak` が立つ。
 
-### 3.3 beqz/jmp と CTRLLEAK
+### 3.3 beqz/bnez/jmp と CTRLLEAK
 
-`beqz` / `jmp` 命令では、レジスタやメモリの値は変更せず、  
+`beqz` / `bnez` / `jmp` 命令では、レジスタやメモリの値は変更せず、  
 **制御フローに関する観測履歴 `obsCtrl`** のみを更新する。
 
-- `beqz cond, label`:
-  - 条件レジスタ `cond` の格子値を取得し、それを `observed` とみなす。
+- `beqz cond, label` / `bnez cond, label`:
+  - 条件レジスタ `cond` の格子値を取得し、それを `observed` とみなす（方向情報は現状記録しない）。
 - `jmp ...`:
-  - 現段階では常に `EqLow` とみなす（将来的に式のレベルに応じた扱いに拡張可能）。
+  - **ターゲット式の格子値を観測する**。`obsId = "\<pc>:target:\<expr>"`（`expr` は式を文字列化したもの）。
+  - NS 観測では `L_target.ns`、Spec 観測では `L_target.sp` を `observed` として扱う。
 
 更新規則はメモリ観測と同様で、NS/Spec で関数を分けている:
 
@@ -199,8 +200,8 @@ updateCtrlObsSpec(state, obsId, observed) {
 
 したがって:
 
-- NS の `beqz` で条件が High であることが「許容漏洩」としてベースラインに乗ることはある。
-- 同じ PC で Spec の `beqz` が High 条件を観測しても、それが既に NS で High なら新規漏洩とはみなさない。
+- NS の `beqz/bnez` で条件が High であることが「許容漏洩」としてベースラインに乗ることはある。
+- 同じ PC で Spec の `beqz/bnez` が High 条件を観測しても、それが既に NS で High なら新規漏洩とはみなさない。
 - NS で Low / ⊥ だった条件が Spec 側で High になった場合に、CTRLLEAK (`Leak`) として検出される。
 
 ## 4. 不動点計算と違反判定

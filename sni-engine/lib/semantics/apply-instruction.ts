@@ -28,6 +28,10 @@ function assertNever(instr: never, node: GraphNode): never {
 }
 
 const toControlObsId = (pc: number) => String(pc);
+const toControlTargetObsId = (pc: number, target?: Expr) => {
+  const suffix = stringifyExpr(target);
+  return suffix ? `${pc}:target:${suffix}` : `${pc}:target`;
+};
 
 function toMemObsId(pc: number, addr?: Expr): string | undefined {
   if (!addr) return undefined;
@@ -136,11 +140,23 @@ export function applyInstruction(
       break;
     }
     case "jmp": {
-      const level: LatticeValue = "EqLow";
+      const targetLevel = evalExpr(state, ast.target);
+      const observed = executionMode === "NS"
+        ? targetLevel.ns
+        : targetLevel.sp;
+      const targetObsId = toControlTargetObsId(node.pc, ast.target);
       if (executionMode === "NS") {
-        updateCtrlObsNS(next, ctrlObsId, level);
+        updateCtrlObsNS(
+          next,
+          targetObsId,
+          securityToLattice(observed),
+        );
       } else {
-        updateCtrlObsSpec(next, ctrlObsId, level);
+        updateCtrlObsSpec(
+          next,
+          targetObsId,
+          securityToLattice(observed),
+        );
       }
       break;
     }

@@ -1,4 +1,4 @@
-import type { Instruction } from "@/muasm-ast";
+import type { Expr, Instruction } from "@/muasm-ast";
 
 export const normalizeOperand = (token: string): string =>
   token.replace(/,+$/g, "");
@@ -13,7 +13,7 @@ type AnyExpr = {
   [key: string]: unknown;
 };
 
-export function stringifyExpr(expr: AnyExpr | undefined): string {
+export function stringifyExpr(expr: AnyExpr | Expr | undefined): string {
   const e = expr;
   switch (e?.kind) {
     case "reg":

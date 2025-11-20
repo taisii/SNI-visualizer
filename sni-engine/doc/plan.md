@@ -29,16 +29,16 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
 理論仕様との残存ギャップは次のとおり（未解決のみ列挙）:
 
 1. **CTRLLEAK のターゲット粒度不足**  
-   - 現行: 分岐条件 (`pc` キー) と分岐方向 (`pc:dir` キー) を観測済み。`jmp` のターゲット式や `beqz` のターゲット PC は観測していない。  
-   - TODO: ターゲットアドレスの抽象ラベルを観測履歴に記録するか判断し、UI キー形式を決める。
+   - **対応済み (2025-11-20):** `jmp` のターゲット式を `obsCtrl` に `pc:target:<expr>` 形式で観測し、NS/Spec 差分で Leak を検知するよう拡張。  
+   - 残タスク: `beqz` のジャンプ先 PC も観測するかは未決定。
 
 2. **観測キー命名の確定**  
-   - 現行: `obsMem` は `"pc:addr"`, `obsCtrl` は `pc`, `pc:dir`。  
-   - TODO: UI/ドキュメントで一貫したプレフィックス（例: `m:pc:addr`, `c:pc:dir`, `c:pc:target` など）を定義し、`spec.md` を更新。
+   - 現行: `obsMem` は `"pc:addr"`, `obsCtrl` は 条件キー `pc` と ターゲットキー `pc:target:<expr>`。  
+   - TODO: UI/ドキュメントで一貫したプレフィックス（例: `m:pc:addr`, `c:pc`, `c:pc:target` など）を定義し、`spec.md` を更新。
 
 3. **テストの補完**  
    - 仕様で書いた例「値のみ High だがアドレス Low → 非違反」など、観測チャンネルの境界条件を含むテストが未追加。  
-   - 方向観測が Leak になる/ならないケースの網羅度を上げる。
+  - 条件観測／ターゲット観測で Leak が立つ・立たない境界ケースの網羅度を上げる。
 
 ## 2. 段階的な拡張フェーズ（更新版）
 
@@ -56,7 +56,7 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
 - DoD: 既存テストがキー変更後もパスし、UI で観測種別が正しくラベルされる。
 
 ### フェーズ 3: 観測境界テストの充実
-- ケース追加: 「値のみ High だがアドレス Low → 非違反」「方向観測のみ差分」「ターゲットのみ差分」など。
+- ケース追加: 「値のみ High だがアドレス Low → 非違反」「ターゲットのみ差分」など。
 - MEM/CTRL それぞれで `EqLow/EqHigh/Leak` の遷移が期待通りになることを確認。
 - DoD: 新規テストが追加され、CI 緑。
 
@@ -103,7 +103,7 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
 - **観測履歴 O# / J# と MEMLEAK/CTRLLEAK**  
   - メモリ観測: `obsMem` を `"pc:addr"` キーで管理し、`updateMemObsNS` / `updateMemObsSpec` が  
     「NS で High 観測済みならベースライン、NS では Low/⊥ だが Spec で High なら Leak」という表 2 のルールを実装。  
-  - 制御観測: `obsCtrl` を `pc`（条件値）と `pc:dir`（taken/not-taken）の 2 種のキーで管理し、  
+  - 制御観測: `obsCtrl` を 条件キー `pc` と ターゲットキー `pc:target:<expr>` の 2 種のキーで管理し、  
     `updateCtrlObsNS` / `updateCtrlObsSpec` が MEMLEAK と同じパターンで CTRLLEAK を検出する。  
   - `stateHasViolation` は O#/J# に Leak/Top が現れたかだけを見るため、違反判定ロジックも理論と対応している。
 
@@ -145,9 +145,9 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
 
 ## 6. 本メモに未記載だった追加ギャップと対応タスク
 
-- **方向観測（beqz）の整合性**  
-  - 現状: エッジラベル `taken/not` を固定で `EqLow/EqHigh` に対応付けているため、条件が Low でも High でも方向差分だけで Leak になる可能性あり。  
-  - 対応: 条件レジスタの抽象値と連動させる仕様に改めるか、方向観測を無効化するかの設計判断を行い、結果を `analysis.ts` とテスト・`spec.md` に反映する。
+- **方向観測の扱い**  
+  - 現状: `beqz/bnez` は条件レベルのみを観測し、方向キーを生成していないため方向差分だけでは Leak 判定を行わない。  
+  - 対応: 方向観測を導入するか、現状非対応を仕様に明記するかを決め、結果を `analysis.ts` とテスト・`spec.md` に反映する。
 
 - **メモリ観測キーの粒度再検討**  
   - 現状: `obsMem` キーが `pc:addr式` のため、同一 PC でもアドレス式ごとに履歴が分散し、漏洩検知が弱まる可能性。  

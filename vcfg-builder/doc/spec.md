@@ -4,7 +4,7 @@
 
 ## 1. 入力
 - **対象言語**: MuASM テキスト。空行・行末コメント（`//` 以降）は無視し、ラベルは次の命令にひも付けます（`Loop:` のみの行も可）。重複ラベルはパース時点でエラーになります。`beqz` のラベル解決は前方参照もサポートします。参照: `muasm-ast/lib/parser.ts`。
-- **サポート命令**（8 種類）: `skip`、代入 `x <- e`、`load x, e`、`store x, e`、`beqz x, L`、`jmp e`、`spbarr`、条件付き代入 `x <- e1 ? e2`。構文とトークナイズは `muasm-ast/lib/parser.ts`。
+- **サポート命令**（8 種類）: `skip`、代入 `x <- e`、`load x, e`、`store x, e`、`beqz x, L`、`bnez x, L`、`jmp e`、`spbarr`、条件付き代入 `x <- e1 ? e2`。構文とトークナイズは `muasm-ast/lib/parser.ts`。
 - **ジャンプ解決**: `jmp` 先は整数リテラルまたはラベルでなければエラー。レジスタや式がラベルに解決できない場合は例外を投げます。参照: `muasm-ast/lib/parser.ts`、`vcfg-builder/lib/modes/*`。
 - **パラメータ**: `windowSize`（投機ウィンドウ長）デフォルト 20。0 以下は即時例外。参照: `vcfg-builder/lib/options.ts`。
 

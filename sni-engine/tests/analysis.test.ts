@@ -385,6 +385,110 @@ describe("analyzeVCFG", () => {
     expect(obs?.data["2"].label).toBe("Leak");
   });
 
+  it("detects control-flow leak via jmp target expression", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "assign tgt base"),
+        baseNode("s1", 1, "spec", "assign tgt secret"),
+        baseNode("n2", 2, "ns", "jmp tgt"),
+      ],
+      edges: [
+        edge("n0", "n2", "ns"), // ベースライン: Low ターゲット
+        edge("n0", "s1", "spec"),
+        edge("s1", "n2", "spec"), // Spec: High ターゲット
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      policy: { regs: { base: "Low", secret: "High", tgt: "Low" } },
+      entryRegs: ["base", "secret", "tgt"],
+    });
+
+    expect(res.result).toBe("SNI_Violation");
+    const specJmp = res.trace.steps.find(
+      (s) => s.nodeId === "n2" && s.executionMode === "Speculative",
+    );
+    expect(specJmp?.isViolation).toBe(true);
+    const obs = specJmp?.state.sections.find((s) => s.id === "obsCtrl");
+    expect(obs?.alert).toBe(true);
+    expect(obs?.data["2:target:tgt"]?.label).toBe("Leak");
+  });
+
+  it("does not report leak when jmp target stays Low in NS/Spec", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "assign tgt base"), // NS/Spec とも Low のまま
+        baseNode("s1", 1, "spec", "assign tgt base"),
+        baseNode("n2", 2, "ns", "jmp tgt"),
+      ],
+      edges: [
+        edge("n0", "n2", "ns"),
+        edge("n0", "s1", "spec"),
+        edge("s1", "n2", "spec"),
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      policy: { regs: { base: "Low", tgt: "Low" } },
+      entryRegs: ["base", "tgt"],
+    });
+
+    expect(res.result).toBe("Secure");
+    const specJmp = res.trace.steps.find(
+      (s) => s.nodeId === "n2" && s.executionMode === "Speculative",
+    );
+    const obs = specJmp?.state.sections.find((s) => s.id === "obsCtrl");
+    expect(obs?.alert).toBe(false);
+    expect(obs?.data["2:target:tgt"]?.label).toBe("Low");
+  });
+
+  it("stringifies complex jmp target expressions in observations", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "assign a base"),
+        baseNode("n1", 1, "ns", "assign b base"),
+        {
+          id: "n2",
+          pc: 2,
+          type: "ns",
+          label: "2: jmp (a+b)",
+          instruction: "jmp a+b",
+          instructionAst: {
+            op: "jmp",
+            target: {
+              kind: "binop",
+              op: "+",
+              left: { kind: "reg", name: "a" },
+              right: { kind: "reg", name: "b" },
+            },
+            text: "jmp (a+b)",
+          },
+        },
+        baseNode("s3", 3, "spec", "assign b secret"),
+      ],
+      edges: [
+        edge("n0", "n1", "ns"),
+        edge("n1", "n2", "ns"),
+        edge("n1", "s3", "spec"),
+        edge("s3", "n2", "spec"),
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      policy: { regs: { base: "Low", secret: "High", a: "Low", b: "Low" } },
+      entryRegs: ["base", "secret", "a", "b"],
+    });
+
+    expect(res.result).toBe("SNI_Violation");
+    const specJmp = res.trace.steps.find(
+      (s) => s.nodeId === "n2" && s.executionMode === "Speculative",
+    );
+    expect(specJmp?.isViolation).toBe(true);
+    const obs = specJmp?.state.sections.find((s) => s.id === "obsCtrl");
+    expect(obs?.alert).toBe(true);
+    expect(obs?.data["2:target:(a+b)"]?.label).toBe("Leak");
+  });
+
   it("rollback restores baseline regs/mem after secure speculation", async () => {
     const graph: StaticGraph = {
       nodes: [
