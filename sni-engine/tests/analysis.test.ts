@@ -256,7 +256,7 @@ describe("analyzeVCFG", () => {
     const res = await analyzeVCFG(graph, { policy: { regs: { x: "Low" } } });
     expect(res.error?.type).toBe("AnalysisError");
     expect(res.error?.message).toContain("unsupported instruction");
-    expect(res.trace.steps).toHaveLength(0);
+    expect(res.trace.steps.length).toBeGreaterThan(0);
   });
 
   it("speculative edge keeps speculative mode when NS -> spec-begin -> ns", async () => {
@@ -614,5 +614,33 @@ L11:
     expect(obsN1.data["1:c"].label).toBe("EqLow");
 
     expect(steps.every((s) => s.isViolation === false)).toBe(true);
+  });
+
+  it("returns partial trace when maxSteps is exceeded", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "skip"),
+        baseNode("n1", 1, "ns", "skip"),
+      ],
+      edges: [edge("n0", "n1", "ns"), edge("n1", "n0", "ns")],
+    };
+
+    const res = await analyzeVCFG(graph, { maxSteps: 1 });
+    expect(res.error?.message).toBe("maxSteps exceeded");
+    expect(res.trace.steps.length).toBeGreaterThan(0);
+  });
+
+  it("returns partial trace when iterationCap is exceeded", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "skip"),
+        baseNode("n1", 1, "ns", "skip"),
+      ],
+      edges: [edge("n0", "n1", "ns"), edge("n1", "n0", "ns")],
+    };
+
+    const res = await analyzeVCFG(graph, { iterationCap: 1 });
+    expect(res.error?.message).toBe("iterationCap exceeded");
+    expect(res.trace.steps.length).toBeGreaterThan(0);
   });
 });

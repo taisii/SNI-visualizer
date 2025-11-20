@@ -162,7 +162,7 @@ export async function analyzeVCFG(
       return {
         schemaVersion: ANALYSIS_SCHEMA_VERSION,
         graph,
-        trace: { steps: [] },
+        trace: { steps: stepLogs },
         traceMode,
         result: "SNI_Violation",
         error: {
@@ -271,7 +271,7 @@ export async function analyzeVCFG(
       return {
         schemaVersion: ANALYSIS_SCHEMA_VERSION,
         graph,
-        trace: { steps: [] },
+        trace: { steps: stepLogs } as ExecutionTrace,
         traceMode,
         result: "SNI_Violation",
         error: {

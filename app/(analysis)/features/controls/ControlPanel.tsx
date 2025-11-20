@@ -1,3 +1,11 @@
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Pause,
+  Play,
+} from "lucide-react";
 import type { TraceMode } from "@/lib/analysis-schema";
 
 type Props = {
@@ -9,8 +17,10 @@ type Props = {
   currentStep: number;
   maxStep: number;
   onAnalyze: () => void;
+  onFirst: () => void;
   onPrev: () => void;
   onNext: () => void;
+  onLast: () => void;
   onReset: () => void;
   onToggleAutoPlay: () => void;
   onTraceModeChange: (mode: TraceMode) => void;
@@ -25,8 +35,10 @@ export function ControlPanel({
   currentStep,
   maxStep,
   onAnalyze,
+  onFirst,
   onPrev,
   onNext,
+  onLast,
   onReset,
   onToggleAutoPlay,
   onTraceModeChange,
@@ -70,34 +82,58 @@ export function ControlPanel({
             <option value="bfs">到達順（BFS）</option>
           </select>
         </label>
-        <button
-          className="rounded border border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100"
-          onClick={onPrev}
-          disabled={!canPrev || isLoading}
-          type="button"
-        >
-          Prev
-        </button>
-        <button
-          className="rounded border border-neutral-300 px-3 py-1 text-sm font-medium text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100"
-          onClick={onNext}
-          disabled={!canNext || isLoading}
-          type="button"
-        >
-          Next
-        </button>
-        <button
-          className={`rounded px-3 py-1 text-sm font-semibold ${
-            isAutoPlay
-              ? "bg-amber-200 text-amber-900"
-              : "bg-neutral-200 text-neutral-800"
-          } disabled:cursor-not-allowed disabled:opacity-60`}
-          onClick={onToggleAutoPlay}
-          disabled={isLoading || (!canNext && !isAutoPlay)}
-          type="button"
-        >
-          {isAutoPlay ? "停止" : "Auto Play"}
-        </button>
+
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            className="rounded border border-neutral-300 p-1 text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+            onClick={onFirst}
+            disabled={!canPrev || isLoading}
+            type="button"
+            title="最初へ"
+          >
+            <ChevronsLeft size={16} />
+          </button>
+          <button
+            className="rounded border border-neutral-300 p-1 text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+            onClick={onPrev}
+            disabled={!canPrev || isLoading}
+            type="button"
+            title="前へ"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            className={`rounded border p-1 ${
+              isAutoPlay
+                ? "border-amber-300 bg-amber-100 text-amber-900"
+                : "border-neutral-300 text-neutral-800"
+            } disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400`}
+            onClick={onToggleAutoPlay}
+            disabled={isLoading || (!canNext && !isAutoPlay)}
+            type="button"
+            title={isAutoPlay ? "停止" : "自動再生"}
+          >
+            {isAutoPlay ? <Pause size={16} /> : <Play size={16} />}
+          </button>
+          <button
+            className="rounded border border-neutral-300 p-1 text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+            onClick={onNext}
+            disabled={!canNext || isLoading}
+            type="button"
+            title="次へ"
+          >
+            <ChevronRight size={16} />
+          </button>
+          <button
+            className="rounded border border-neutral-300 p-1 text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+            onClick={onLast}
+            disabled={!canNext || isLoading}
+            type="button"
+            title="最後へ"
+          >
+            <ChevronsRight size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );

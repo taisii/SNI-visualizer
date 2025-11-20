@@ -21,6 +21,9 @@ const AUTO_PLAY_INTERVAL_MS = 800;
 export default function Home() {
   const [source, setSource] = useState<string>(createInitialSource);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [analysisError, setAnalysisError] = useState<AnalysisError | undefined>(
+    undefined,
+  );
   const [currentStep, setCurrentStep] = useState(0);
   const [isAutoPlay, setIsAutoPlay] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,34 +78,48 @@ export default function Home() {
       const modeToUse = modeOverride ?? traceMode;
       const analysis = await analyze(source, { traceMode: modeToUse });
       if (analysis.error) {
-          const description = formatAnalysisError(analysis.error);
-          const isMaxSteps = Boolean(
-            analysis.error.detail &&
-              typeof analysis.error.detail === "object" &&
-              (analysis.error.detail as Record<string, unknown>).maxSteps !== undefined,
-          );
-          toast.error(analysis.error.message ?? "解析でエラーが発生しました", {
-            description,
-            action: {
-              label: isMaxSteps ? "BFS で再解析" : "詳細コピー",
-              onClick: () => {
-                if (isMaxSteps) {
-                  if (!pendingBfsRetryRef.current) {
-                    pendingBfsRetryRef.current = true;
-                    setTraceMode("bfs");
-                    void handleAnalyze("bfs");
-                  }
-                  return;
-                }
-                if (typeof navigator !== "undefined" && navigator.clipboard) {
-                  void navigator.clipboard.writeText(description);
-                }
-              },
-            },
-          });
+        setAnalysisError(analysis.error);
+        const description = formatAnalysisError(analysis.error);
+        const isMaxSteps = Boolean(
+          analysis.error.detail &&
+            typeof analysis.error.detail === "object" &&
+            (analysis.error.detail as Record<string, unknown>).maxSteps !==
+              undefined,
+        );
+        const hasPartialResults = analysis.trace.steps.length > 0;
+
+        if (hasPartialResults) {
+          // 部分的な解析結果を表示するため result をセットする
+          setResult(analysis);
+          // 最後のステップを表示
+          setCurrentStep(analysis.trace.steps.length - 1);
+        } else {
           setResult(null);
-          return;
         }
+
+        toast.error(analysis.error.message ?? "解析でエラーが発生しました", {
+          description,
+          action: {
+            label: isMaxSteps ? "BFS で再解析" : "詳細コピー",
+            onClick: () => {
+              if (isMaxSteps) {
+                if (!pendingBfsRetryRef.current) {
+                  pendingBfsRetryRef.current = true;
+                  setTraceMode("bfs");
+                  void handleAnalyze("bfs");
+                }
+                return;
+              }
+              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                void navigator.clipboard.writeText(description);
+              }
+            },
+          },
+        });
+
+        return;
+      }
+      setAnalysisError(undefined);
       setResult(analysis);
       setCurrentStep(0);
     } catch (e) {
@@ -115,11 +132,19 @@ export default function Home() {
           },
         },
       });
+      setAnalysisError({
+        type: "AnalysisError",
+        message,
+      });
       setResult(null);
     } finally {
       setIsLoading(false);
       pendingBfsRetryRef.current = false;
     }
+  };
+
+  const handleFirst = () => {
+    setCurrentStep(0);
   };
 
   const handlePrev = () => {
@@ -131,8 +156,14 @@ export default function Home() {
     setCurrentStep((s) => Math.min(result.trace.steps.length - 1, s + 1));
   };
 
+  const handleLast = () => {
+    if (!result) return;
+    setCurrentStep(result.trace.steps.length - 1);
+  };
+
   const handleReset = () => {
     setResult(null);
+    setAnalysisError(undefined);
     setCurrentStep(0);
     setIsAutoPlay(false);
   };
@@ -148,7 +179,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col bg-neutral-100 text-neutral-900">
-      <Header result={result?.result ?? null} />
+      <Header result={result?.result ?? null} error={analysisError} />
       <Toaster richColors position="bottom-right" />
       <main className="grid flex-1 grid-cols-1 gap-4 p-6 lg:grid-cols-2">
         <section className="flex flex-col gap-3 lg:min-h-[calc(100vh-140px)]">
@@ -161,8 +192,10 @@ export default function Home() {
               currentStep={currentStep}
               maxStep={controlState.maxStep}
               onAnalyze={() => handleAnalyze()}
+              onFirst={handleFirst}
               onPrev={handlePrev}
               onNext={handleNext}
+              onLast={handleLast}
               onReset={handleReset}
               onToggleAutoPlay={() => setIsAutoPlay((v) => !v)}
               traceMode={traceMode}
