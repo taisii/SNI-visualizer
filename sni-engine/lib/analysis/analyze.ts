@@ -25,7 +25,7 @@ import {
   stateHasViolation,
   extractObservations,
 } from "../core/state-ops";
-import { stateToSections } from "./state-to-sections";
+import { stateToSections, type SpecContextInfo } from "./state-to-sections";
 import { collectRegisterNames } from "./registers";
 
 export type AnalyzeOptions = {
@@ -81,6 +81,45 @@ const deriveInitialStack = (node: GraphNode, mode: ExecutionMode): string[] => {
   const ctxId = node.specContext?.id;
   return ctxId ? [ctxId] : [];
 };
+
+const buildSpecContextInfo = (
+  graph: StaticGraph,
+): Map<string, SpecContextInfo> => {
+  const info = new Map<string, SpecContextInfo>();
+  const nodeById = new Map(graph.nodes.map((n) => [n.id, n] as const));
+
+  for (const node of graph.nodes) {
+    const ctx = node.specContext;
+    if (ctx?.phase === "begin") {
+      info.set(ctx.id, { id: ctx.id });
+    }
+  }
+
+  for (const edge of graph.edges) {
+    if (edge.type !== "spec") continue;
+    const targetNode = nodeById.get(edge.target);
+    const ctx = targetNode?.specContext;
+    if (!ctx || ctx.phase !== "begin") continue;
+
+    const assumption =
+      edge.label?.replace(/^spec:\s*/i, "") ?? edge.label ?? undefined;
+    const originNode = nodeById.get(edge.source);
+    const originLabel =
+      originNode?.instruction && originNode.instruction !== "skip"
+        ? originNode.instruction
+        : undefined;
+
+    const prev = info.get(ctx.id) ?? { id: ctx.id };
+    info.set(ctx.id, {
+      id: ctx.id,
+      originNodeId: originNode?.id ?? prev.originNodeId,
+      originLabel: originLabel ?? prev.originLabel,
+      assumption: assumption ?? prev.assumption,
+    });
+  }
+
+  return info;
+};
 export async function analyzeVCFG(
   rawGraph: StaticGraph,
   opts: AnalyzeOptions = {},
@@ -116,6 +155,7 @@ export async function analyzeVCFG(
   const speculationDepthWarned = new Set<string>();
   const nodeMap = new Map(graph.nodes.map((n) => [n.id, n] as const));
   const usedRegs = collectRegisterNames(graph);
+  const specContextInfo = buildSpecContextInfo(graph);
   const entryNode = getEntryNode(graph, opts.entryNodeId, nodeMap);
   const adj = getAdj(graph);
 
@@ -163,7 +203,10 @@ export async function analyzeVCFG(
     nodeId: "", // entry はどのノードにもフォーカスさせない
     description: "(entry)",
     executionMode: entryMode,
-    state: stateToSections(init, entryStack),
+    state: stateToSections(init, {
+      specStack: entryStack,
+      specContextInfo,
+    }),
     isViolation: stateHasViolation(init),
   });
 
@@ -219,7 +262,10 @@ export async function analyzeVCFG(
       nodeId,
       description: node.label ?? "",
       executionMode,
-      state: stateToSections(outState, stack),
+      state: stateToSections(outState, {
+        specStack: stack,
+        specContextInfo,
+      }),
       isViolation: violation,
     });
 

@@ -88,7 +88,7 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
 
 - **VCFG 構造**  
   - `vcfg-builder/lib/modes/meta.ts` では NS ノードを共有し、投機区間を示す `spec-begin/spec-end` メタノードだけを `type:"spec"` で追加する。いずれも `type:"rollback"` エッジで復帰を表す。  
-  - `beqz` は taken/not-taken の 2 本の NS エッジを張り、分岐ごとに Always-mispredict で両方向の投機を展開する（meta 構造を共通で使用）。
+  - `beqz` / `bnez` は通過条件をラベルに持つ 2 本の NS エッジを張り、分岐ごとに Always-mispredict で両方向の投機を展開する（meta 構造を共通で使用）。
 
 - **抽象状態 Σ# = (R#, Γ#, O#, J#)**  
   - `AbsState`（`sni-engine/src/state.ts`）が `regs`, `mem`, `obsMem`, `obsCtrl` の 4 成分を持ち、  

@@ -65,6 +65,11 @@ export function buildMeta(
     }
 
     if (inst.op === "beqz" || inst.op === "bnez") {
+      const condLabelTaken =
+        inst.op === "beqz" ? `${inst.cond} == 0` : `${inst.cond} != 0`;
+      const condLabelNotTaken =
+        inst.op === "beqz" ? `${inst.cond} != 0` : `${inst.cond} == 0`;
+
       const takenTarget = resolveLabel(inst.target);
       const fallthroughIndex = idx + 1;
       if (hasPc(takenTarget)) {
@@ -72,7 +77,7 @@ export function buildMeta(
           source: currentNodeId,
           target: `n${takenTarget}`,
           type: "ns",
-          label: "taken",
+          label: condLabelTaken,
         });
       }
       if (fallthroughIndex < program.instructions.length) {
@@ -80,14 +85,9 @@ export function buildMeta(
           source: currentNodeId,
           target: `n${fallthroughIndex}`,
           type: "ns",
-          label: "not-taken",
+          label: condLabelNotTaken,
         });
       }
-
-      const condLabelTaken =
-        inst.op === "beqz" ? `${inst.cond} == 0` : `${inst.cond} != 0`;
-      const condLabelNotTaken =
-        inst.op === "beqz" ? `${inst.cond} != 0` : `${inst.cond} == 0`;
 
       traceSpeculativeMeta(
         fallthroughIndex,

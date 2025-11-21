@@ -29,10 +29,51 @@ describe("stateToSections", () => {
 
   it("adds specStack section when stack is given", () => {
     const stack = ["specA", "specB"];
-    const sections = stateToSections(makeState(), stack).sections;
+    const sections = stateToSections(makeState(), { specStack: stack }).sections;
     const specSection = sections.find((s) => s.id === "specStack");
     expect(specSection).toBeDefined();
     expect(specSection?.data.d2.label).toBe("specA");
     expect(specSection?.data.d1.label).toBe("specB");
+  });
+
+  it("includes empty specStack section when stack is omitted", () => {
+    const sections = stateToSections(makeState()).sections;
+    const specSection = sections.find((s) => s.id === "specStack");
+    expect(specSection).toBeDefined();
+    expect(Object.keys(specSection?.data ?? {}).length).toBe(0);
+  });
+
+  it("injects spec context metadata when provided", () => {
+    const stack = ["ctxBegin", "ctxNested"];
+    const info = new Map([
+      [
+        "ctxBegin",
+        {
+          id: "ctxBegin",
+          originLabel: "beqz x, L1",
+          assumption: "x == 0",
+        },
+      ],
+      [
+        "ctxNested",
+        {
+          id: "ctxNested",
+          originLabel: "bnez y, L2",
+          assumption: "y != 0",
+        },
+      ],
+    ]);
+
+    const sections = stateToSections(makeState(), {
+      specStack: stack,
+      specContextInfo: info,
+    }).sections;
+
+    const specSection = sections.find((s) => s.id === "specStack");
+    expect(specSection).toBeDefined();
+    expect(specSection?.data.d2.label).toBe("beqz x, L1");
+    expect(specSection?.data.d2.description).toBe("仮定: x == 0");
+    expect(specSection?.data.d1.label).toBe("bnez y, L2");
+    expect(specSection?.data.d1.description).toBe("仮定: y != 0");
   });
 });

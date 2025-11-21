@@ -71,8 +71,8 @@ Target: skip
     );
 
     const nsEdges = graph.edges.filter((e) => e.source === "n0");
-    expect(nsEdges.some((e) => e.label === "taken")).toBe(true);
-    expect(nsEdges.some((e) => e.label === "not-taken")).toBe(true);
+    expect(nsEdges.some((e) => e.label === "flag != 0")).toBe(true);
+    expect(nsEdges.some((e) => e.label === "flag == 0")).toBe(true);
 
     const specEdgeLabels = new Set(
       graph.edges

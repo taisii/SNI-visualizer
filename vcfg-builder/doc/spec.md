@@ -13,7 +13,7 @@
 ## 2. 出力（StaticGraph）
 - **スキーマの正本**: `StaticGraph`/`AnalysisResult` の正式スキーマは `doc/project.md` §3 と `lib/analysis-schema/index.ts` をソース・オブ・トゥルースとする。本書は生成ポリシーと実装上の挙動のみを要約する。
 - **ノード生成ポリシー**: 各命令に ID `n{pc}` を付与し、フィールドはスキーマに沿って埋める（例: `pc`、`label`、`type`、`sourceLine`）。参照: `vcfg-builder/lib/build-vcfg.ts`、`vcfg-builder/lib/modes/meta.ts`。
-- **エッジ生成ポリシー**: `type` は `ns` / `spec` / `rollback` を使用し、重複はセットで排除。分岐の ns エッジには `taken` / `not-taken` ラベル、spec エッジには条件ラベルを付与する。discard モードでは rollback エッジを出力しない。参照: `vcfg-builder/lib/graph-builder.ts`。
+- **エッジ生成ポリシー**: `type` は `ns` / `spec` / `rollback` を使用し、重複はセットで排除。分岐の ns エッジは通過条件（例: `x == 0` / `x != 0`）をラベルに付与し、spec エッジも条件ラベルを付与する。discard モードでは rollback エッジを出力しない。参照: `vcfg-builder/lib/graph-builder.ts`。
 - **返却単位**: `buildVCFG` はグラフ構造のみを返す。`schemaVersion` 付与とエラーハンドリングは上位ファサード `analyze()`（`lib/analysis-engine/index.ts`）で行う。
 
 ## 3. 処理フロー
@@ -21,7 +21,7 @@
    - ラベル表と命令列を構築し、`beqz` の分岐先 PC を事前解決します。未定義ラベルや無効トークンは `ParseError`（sourceLine 付き）で失敗。参照: `muasm-ast/lib/parser.ts`。
 
 2. **通常パスのグラフ化**  
-   - 全命令を通常ノードとして登録。`jmp` は解決先へ 1 本、`beqz` は taken / not-taken の 2 本、その他は次行へのフォールスルーを張ります。参照: `vcfg-builder/lib/modes/meta.ts`。
+   - 全命令を通常ノードとして登録。`jmp` は解決先へ 1 本、`beqz` / `bnez` は条件をラベルに持つ 2 本、その他は次行へのフォールスルーを張ります。参照: `vcfg-builder/lib/modes/meta.ts`。
 
 3. **投機パスの展開（meta モード）**  
    - NS ノードを共有しつつ、分岐ごとに `spec-begin` / `spec-end` のメタノード（`type:"spec"`）を追加して投機領域をマーキング。予算ゼロまたは `spbarr` で `rollback`。

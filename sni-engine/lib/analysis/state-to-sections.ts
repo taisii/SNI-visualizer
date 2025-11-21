@@ -5,7 +5,23 @@ import { securityToLattice } from "../core/state";
 
 type SpecStack = readonly string[] | undefined;
 
-export function stateToSections(state: AbsState, specStack?: SpecStack) {
+export type SpecContextInfo = {
+  id: string;
+  assumption?: string;
+  originLabel?: string;
+  originNodeId?: string;
+};
+
+type StateToSectionsOptions = {
+  specStack?: SpecStack;
+  specContextInfo?: Map<string, SpecContextInfo>;
+};
+
+export function stateToSections(
+  state: AbsState,
+  options: StateToSectionsOptions = {},
+) {
+  const { specStack, specContextInfo } = options;
   const regs: Record<string, ReturnType<typeof toDisplay>> = {};
   const mem: Record<string, ReturnType<typeof toDisplay>> = {};
   const obsMem: Record<string, ReturnType<typeof toDisplay>> = {};
@@ -32,9 +48,14 @@ export function stateToSections(state: AbsState, specStack?: SpecStack) {
     const depth = specStack.length;
     specStack.forEach((ctx, idx) => {
       const level = depth - idx;
+      const info = specContextInfo?.get(ctx);
+      const baseLabel = info?.originLabel ?? ctx;
+      const assumption = info?.assumption;
+      const label = baseLabel ?? ctx;
       stackData[`d${level}`] = {
-        label: ctx,
+        label,
         style: "info",
+        description: assumption ? `仮定: ${assumption}` : undefined,
       };
     });
   }
@@ -70,15 +91,12 @@ export function stateToSections(state: AbsState, specStack?: SpecStack) {
     },
   ];
 
-  if (specStack && specStack.length > 0) {
-    sections.push({
-      id: "specStack",
-      title: "Speculation Stack",
-      type: "key-value" as const,
-      data: stackData,
-      description: "トップが d1。Stack Guard モードで表示されます。",
-    });
-  }
+  sections.push({
+    id: "specStack",
+    title: "Speculation Stack",
+    type: "key-value" as const,
+    data: stackData,
+  });
 
   return { sections };
 }
