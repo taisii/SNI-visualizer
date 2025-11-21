@@ -105,7 +105,6 @@ export function securityToLattice(v: SecurityPoint): LatticeValue {
     case "Bot":
       return "Bot";
     case "Top":
-    default:
       return "Top";
   }
 }
@@ -119,7 +118,8 @@ export function latticeToSecurity(v: LatticeValue): SecurityPoint {
     case "Bot":
       return "Bot";
     case "Top":
-    default:
+    case "Leak":
+    case "Diverge":
       // Leak/Diverge など関係専用の値は Top 扱いで潰す
       return "Top";
   }

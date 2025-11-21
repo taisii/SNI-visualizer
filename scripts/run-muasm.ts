@@ -4,16 +4,20 @@ import path from "node:path";
 import process from "node:process";
 import { analyze } from "../lib/analysis-engine";
 import type {
+  AnalysisResult,
   TraceMode,
   TraceStep,
   AnalysisError,
 } from "../lib/analysis-schema";
+import type { SpeculationMode } from "../sni-engine/lib/analysis/analyze";
 
 const DEFAULT_TRACE_MODE: TraceMode = "bfs";
 const DEFAULT_TARGET = "muasm_case";
+const DEFAULT_SPEC_MODE: SpeculationMode = "stack-guard";
 
 type CliOptions = {
   traceMode: TraceMode;
+  speculationMode: SpeculationMode;
   windowSize?: number;
 };
 
@@ -21,6 +25,11 @@ type ParsedArgs = {
   options: CliOptions;
   targets: string[];
 };
+
+type AnalyzeFn = (
+  source: string,
+  options: CliOptions,
+) => Promise<AnalysisResult>;
 
 async function main() {
   let parsed: ParsedArgs;
@@ -51,7 +60,10 @@ async function main() {
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const options: CliOptions = { traceMode: DEFAULT_TRACE_MODE };
+  const options: CliOptions = {
+    traceMode: DEFAULT_TRACE_MODE,
+    speculationMode: DEFAULT_SPEC_MODE,
+  };
   const targets: string[] = [];
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -71,13 +83,27 @@ function parseArgs(argv: string[]): ParsedArgs {
     switch (flag) {
       case "--trace-mode": {
         const value = maybeValue ?? argv[++i];
-        if (value !== "bfs" && value !== "single-path") {
-          throw new Error(
-            `--trace-mode は 'bfs' または 'single-path' を指定してください (got: ${value ?? ""})`,
-          );
+        if (value === "dfs") {
+          options.traceMode = "single-path";
+          break;
         }
-        options.traceMode = value;
-        break;
+        if (value === "bfs" || value === "single-path") {
+          options.traceMode = value;
+          break;
+        }
+        throw new Error(
+          `--trace-mode は 'bfs' | 'single-path' | 'dfs'(エイリアス) を指定してください (got: ${value ?? ""})`,
+        );
+      }
+      case "--spec-mode": {
+        const value = maybeValue ?? argv[++i];
+        if (value === "discard" || value === "stack-guard") {
+          options.speculationMode = value;
+          break;
+        }
+        throw new Error(
+          `--spec-mode は 'discard' | 'stack-guard' を指定してください (got: ${value ?? ""})`,
+        );
       }
       case "--window-size": {
         const value = maybeValue ?? argv[++i];
@@ -91,6 +117,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       case "--help": {
         printUsage();
         process.exit(0);
+        break;
       }
       default:
         throw new Error(`未知のフラグです: ${flag}`);
@@ -105,9 +132,11 @@ function printUsage() {
 Usage: bun run scripts/run-muasm.ts [options] [file|dir ...]
 
 Options:
-  --trace-mode <bfs|single-path>  解析の探索戦略 (default: bfs)
-  --window-size <n>               投機ウィンドウの大きさ (default: VCFG builder デフォルト)
-  --help                          このヘルプを表示
+  --trace-mode <bfs|single-path|dfs>  解析の探索戦略 (default: bfs)。dfs は single-path のエイリアス。
+  --spec-mode <discard|stack-guard>
+                                   投機モード (default: stack-guard)
+  --window-size <n>                投機ウィンドウの大きさ (default: VCFG builder デフォルト)
+  --help                           このヘルプを表示
 
 引数を省略すると muasm_case/ 以下の全 .muasm を実行します。`);
 }
@@ -145,7 +174,11 @@ async function collectFromDir(dir: string, acc: Set<string>) {
   );
 }
 
-async function runSingleCase(filePath: string, options: CliOptions): Promise<boolean> {
+async function runSingleCase(
+  filePath: string,
+  options: CliOptions,
+  analyzeFn: AnalyzeFn = (source, opts) => analyze(source, opts),
+): Promise<boolean> {
   const relPath = path.relative(process.cwd(), filePath) || filePath;
   console.log(`\n=== ${relPath} ===`);
 
@@ -158,8 +191,9 @@ async function runSingleCase(filePath: string, options: CliOptions): Promise<boo
   }
 
   try {
-    const result = await analyze(source, {
+    const result = await analyzeFn(source, {
       traceMode: options.traceMode,
+      speculationMode: options.speculationMode,
       windowSize: options.windowSize,
     });
     printAnalysisResult(
@@ -203,7 +237,13 @@ function printAnalysisResult(
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const importMeta = import.meta as ImportMeta & { main?: boolean };
+
+if (importMeta.main) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+export { parseArgs, runSingleCase };

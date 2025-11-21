@@ -3,16 +3,18 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { StaticGraph } from "@/lib/analysis-schema";
 import { analyze } from "../index";
 
-const buildVCFGMock = vi.hoisted(() => vi.fn());
-const analyzeVCFGMock = vi.hoisted(() => vi.fn());
+var buildVCFGMock: ReturnType<typeof vi.fn>;
+var analyzeVCFGMock: ReturnType<typeof vi.fn>;
 
-vi.mock("@/vcfg-builder", () => ({
-  buildVCFG: buildVCFGMock,
-}));
+vi.mock("@/vcfg-builder", () => {
+  buildVCFGMock = vi.fn();
+  return { buildVCFG: buildVCFGMock };
+});
 
-vi.mock("@/sni-engine", () => ({
-  analyzeVCFG: analyzeVCFGMock,
-}));
+vi.mock("@/sni-engine", () => {
+  analyzeVCFGMock = vi.fn();
+  return { analyzeVCFG: analyzeVCFGMock };
+});
 
 describe("analysis-engine analyze", () => {
   beforeEach(() => {
@@ -24,7 +26,7 @@ describe("analysis-engine analyze", () => {
     const graph: StaticGraph = { nodes: [], edges: [] };
     buildVCFGMock.mockReturnValue(graph);
     analyzeVCFGMock.mockResolvedValue({
-      schemaVersion: "1.1.0",
+      schemaVersion: "1.2.0",
       graph,
       trace: { steps: [] },
       traceMode: "single-path",
@@ -35,9 +37,11 @@ describe("analysis-engine analyze", () => {
 
     expect(buildVCFGMock).toHaveBeenCalledWith("source code", {
       windowSize: undefined,
+      speculationMode: "stack-guard",
     });
     expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
       traceMode: "single-path",
+      speculationMode: "stack-guard",
     });
   });
 
@@ -45,7 +49,7 @@ describe("analysis-engine analyze", () => {
     const graph: StaticGraph = { nodes: [], edges: [] };
     buildVCFGMock.mockReturnValue(graph);
     analyzeVCFGMock.mockResolvedValue({
-      schemaVersion: "1.1.0",
+      schemaVersion: "1.2.0",
       graph,
       trace: { steps: [] },
       traceMode: "bfs",
@@ -56,14 +60,17 @@ describe("analysis-engine analyze", () => {
       traceMode: "bfs",
       maxSteps: 3,
       windowSize: 10,
+      speculationMode: "discard",
     });
 
     expect(buildVCFGMock).toHaveBeenCalledWith("source code", {
       windowSize: 10,
+      speculationMode: "discard",
     });
     expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
       traceMode: "bfs",
       maxSteps: 3,
+      speculationMode: "discard",
     });
   });
 

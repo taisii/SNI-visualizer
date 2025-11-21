@@ -1,13 +1,13 @@
 import type { Instruction as MuasmInstruction } from "@/muasm-ast";
 
-export const ANALYSIS_SCHEMA_VERSION = "1.1.0" as const;
+export const ANALYSIS_SCHEMA_VERSION = "1.2.0" as const;
 
 export type TraceMode = "bfs" | "single-path";
 
 export type AnalysisResult = {
   /** 互換性管理のためのスキーマバージョン */
   schemaVersion: typeof ANALYSIS_SCHEMA_VERSION;
-  /** VCFG の静的構造（投機パスではノードを複製し type:"spec" を付与する。共有は禁止） */
+  /** VCFG の静的構造（meta 形式: NS ノードは共有し、投機区間を示す spec-begin/spec-end メタノードに type:"spec" を付与） */
   graph: StaticGraph;
   /** コマ送り表示用の実行トレース */
   trace: ExecutionTrace;

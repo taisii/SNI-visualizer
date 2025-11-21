@@ -6,6 +6,7 @@ export function buildMeta(
   ctx: ProgramContext,
   graph: GraphBuilder,
   windowSize: number,
+  speculationMode: "discard" | "stack-guard",
 ) {
   const { program, resolveJump, resolveLabel, hasPc } = ctx;
 
@@ -17,7 +18,10 @@ export function buildMeta(
   };
 
   let specContextSeq = 0;
-  const nextSpecContextId = () => `specctx${specContextSeq += 1}`;
+  const nextSpecContextId = () => {
+    specContextSeq += 1;
+    return `specctx${specContextSeq}`;
+  };
 
   const addMetaNode = (
     id: string,
@@ -180,11 +184,13 @@ export function buildMeta(
           contextId,
         );
         graph.addEdge({ source: prevNodeId, target: endId, type: "spec" });
-        graph.addEdge({
-          source: endId,
-          target: `n${rollbackIndex}`,
-          type: "rollback",
-        });
+        if (speculationMode !== "discard") {
+          graph.addEdge({
+            source: endId,
+            target: `n${rollbackIndex}`,
+            type: "rollback",
+          });
+        }
       }
       return;
     }
@@ -199,11 +205,13 @@ export function buildMeta(
           contextId,
         );
         graph.addEdge({ source: prevNodeId, target: endId, type: "spec" });
-        graph.addEdge({
-          source: endId,
-          target: `n${rollbackIndex}`,
-          type: "rollback",
-        });
+        if (speculationMode !== "discard") {
+          graph.addEdge({
+            source: endId,
+            target: `n${rollbackIndex}`,
+            type: "rollback",
+          });
+        }
       }
       return;
     }
@@ -223,11 +231,13 @@ export function buildMeta(
           contextId,
         );
         graph.addEdge({ source: instrNodeId, target: endId, type: "spec" });
-        graph.addEdge({
-          source: endId,
-          target: `n${rollbackIndex}`,
-          type: "rollback",
-        });
+        if (speculationMode !== "discard") {
+          graph.addEdge({
+            source: endId,
+            target: `n${rollbackIndex}`,
+            type: "rollback",
+          });
+        }
       }
       return;
     }

@@ -38,7 +38,7 @@ VCFG 上で、実行モード `Mode` は `"NS"` / `"Speculative"` の 2 種類�
 - エッジ遷移時のモード:
   - `ns` エッジ: モード維持
   - `spec` エッジ: 強制的に `Speculative`
-  - `rollback` エッジ: 強制的に `NS`
+  - `rollback` エッジ: 投機スタックを pop し、空なら `NS`、残れば `Speculative` 継続
 
 ## 2. 抽象状態と格子
 
@@ -104,6 +104,18 @@ Bot < EqLow < EqHigh < Diverge < Leak < Top
 - メモリ (RelValue):
   - `policy.mem[k] === "Low"` → `{EqLow, EqLow}`、`"High"` → `{EqHigh, EqHigh}`。
   - 未指定ロケーションは `{EqHigh, EqHigh}` を既定値とみなす。
+
+## 2.1 投機モードの切替
+
+- `speculationMode: "stack-guard"`（デフォルト）  
+  - rollback エッジを辿りつつ、`spec-end` への遷移時に「スタックトップと specContext.id が一致する場合のみ許可」。不一致はスキップする。  
+  - スタック内容は UI で表示され、MaxSpeculationDepth 警告も発行する。
+- `speculationMode: "discard"`  
+  - rollback エッジを無視し、spec-end で探索終了。投機パスは NS に影響を戻さない。
+
+### 現状の課題（スタックキーの簡略化未着手）
+
+- 投機スタックのキーは全コンテキストの連結文字列（例: `Speculative|ctxA::ctxB`）をそのまま使用しており、k-limiting 等の縮約は未実装。深いネスト下では状態数が増えやすい。今後、stack-guard 専用の簡略キー（トップのみ・深さのみ等）への切替を検討する必要がある。
 
 ## 3. 転送関数 (命令セマンティクス)
 

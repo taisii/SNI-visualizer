@@ -15,6 +15,7 @@ import type {
   AnalysisResult,
   TraceMode,
 } from "@/lib/analysis-schema";
+import type { SpeculationMode } from "@/sni-engine";
 
 const AUTO_PLAY_INTERVAL_MS = 800;
 
@@ -28,6 +29,8 @@ export default function Home() {
   const [isAutoPlay, setIsAutoPlay] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [traceMode, setTraceMode] = useState<TraceMode>("single-path");
+  const [speculationMode, setSpeculationMode] =
+    useState<SpeculationMode>("stack-guard");
   const pendingBfsRetryRef = useRef(false);
   const lastWarningsToastRef = useRef<string | null>(null);
 
@@ -88,7 +91,10 @@ export default function Home() {
     setIsAutoPlay(false);
     try {
       const modeToUse = modeOverride ?? traceMode;
-      const analysis = await analyze(source, { traceMode: modeToUse });
+      const analysis = await analyze(source, {
+        traceMode: modeToUse,
+        speculationMode,
+      });
       if (analysis.error) {
         setAnalysisError(analysis.error);
         const description = formatAnalysisError(analysis.error);
@@ -251,6 +257,8 @@ export default function Home() {
               onToggleAutoPlay={() => setIsAutoPlay((v) => !v)}
               traceMode={traceMode}
               onTraceModeChange={(mode) => setTraceMode(mode)}
+              speculationMode={speculationMode}
+              onSpeculationModeChange={(mode) => setSpeculationMode(mode)}
             />
           </div>
           <div className="flex flex-1 flex-col gap-2">

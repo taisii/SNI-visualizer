@@ -26,4 +26,13 @@ describe("stateToSections", () => {
     expect(b.detail?.ns).toBe("Bot");
     expect(b.detail?.sp).toBe("Low");
   });
+
+  it("adds specStack section when stack is given", () => {
+    const stack = ["specA", "specB"];
+    const sections = stateToSections(makeState(), stack).sections;
+    const specSection = sections.find((s) => s.id === "specStack");
+    expect(specSection).toBeDefined();
+    expect(specSection?.data.d2.label).toBe("specA");
+    expect(specSection?.data.d1.label).toBe("specB");
+  });
 });

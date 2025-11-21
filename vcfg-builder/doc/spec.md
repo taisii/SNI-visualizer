@@ -6,12 +6,14 @@
 - **対象言語**: MuASM テキスト。空行・行末コメント（`//` 以降）は無視し、ラベルは次の命令にひも付けます（`Loop:` のみの行も可）。重複ラベルはパース時点でエラーになります。`beqz` のラベル解決は前方参照もサポートします。参照: `muasm-ast/lib/parser.ts`。
 - **サポート命令**（8 種類）: `skip`、代入 `x <- e`、`load x, e`、`store x, e`、`beqz x, L`、`bnez x, L`、`jmp e`、`spbarr`、条件付き代入 `x <- e1 ? e2`。構文とトークナイズは `muasm-ast/lib/parser.ts`。
 - **ジャンプ解決**: `jmp` 先は整数リテラルまたはラベルでなければエラー。レジスタや式がラベルに解決できない場合は例外を投げます。参照: `muasm-ast/lib/parser.ts`、`vcfg-builder/lib/modes/*`。
-- **パラメータ**: `windowSize`（投機ウィンドウ長）デフォルト 20。0 以下は即時例外。参照: `vcfg-builder/lib/options.ts`。
+- **パラメータ**:  
+  - `windowSize`（投機ウィンドウ長）デフォルト 20。0 以下は例外。  
+- `speculationMode`: `"stack-guard"`（デフォルト）/ `"discard"`。discard のとき rollback エッジを生成しない。参照: `vcfg-builder/lib/options.ts`。
 
 ## 2. 出力（StaticGraph）
 - **スキーマの正本**: `StaticGraph`/`AnalysisResult` の正式スキーマは `doc/project.md` §3 と `lib/analysis-schema/index.ts` をソース・オブ・トゥルースとする。本書は生成ポリシーと実装上の挙動のみを要約する。
 - **ノード生成ポリシー**: 各命令に ID `n{pc}` を付与し、フィールドはスキーマに沿って埋める（例: `pc`、`label`、`type`、`sourceLine`）。参照: `vcfg-builder/lib/build-vcfg.ts`、`vcfg-builder/lib/modes/meta.ts`。
-- **エッジ生成ポリシー**: `type` は `ns` / `spec` / `rollback` を使用し、重複はセットで排除。参照: `vcfg-builder/lib/graph-builder.ts`。
+- **エッジ生成ポリシー**: `type` は `ns` / `spec` / `rollback` を使用し、重複はセットで排除。分岐の ns エッジには `taken` / `not-taken` ラベル、spec エッジには条件ラベルを付与する。discard モードでは rollback エッジを出力しない。参照: `vcfg-builder/lib/graph-builder.ts`。
 - **返却単位**: `buildVCFG` はグラフ構造のみを返す。`schemaVersion` 付与とエラーハンドリングは上位ファサード `analyze()`（`lib/analysis-engine/index.ts`）で行う。
 
 ## 3. 処理フロー
@@ -35,5 +37,5 @@
 
 ## 5. 既知の挙動・制限
 - `jmp` のターゲットが即値・ラベル以外（実行時値など）の場合は未対応でエラーになります。`vcfg-builder/lib/modes/*`。
-- 投機・ロールバックエッジにはラベル（例: mispredict/taken）を付けていません。UI 表示は `type` とノード ID のみで判別します。
+- 分岐直後の最初の spec エッジには条件ラベルを付けるが、それ以降の spec エッジと rollback エッジにはラベルを付与しない。rollback は discard モードでは生成されない。
 - 出力度はグラフ構造のみに限定され、解析結果（secure/violation 判定や実行トレース）は別サービスで生成します。`lib/analysis-schema/index.ts:10-33`。

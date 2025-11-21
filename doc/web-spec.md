@@ -25,6 +25,7 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 
 `AnalyzeOptions`（実装: `lib/analysis-engine/index.ts` → `sni-engine/index.ts` → `sni-engine/lib/analysis/analyze.ts`）で受け付ける項目:
 - `traceMode`: `"single-path"`（UI デフォルト）または `"bfs"`  
+- `speculationMode`: `"stack-guard"`（既定）/ `"discard"`  
 - `policy`: `{ regs?: Record<string,"Low"|"High">; mem?: Record<string,"Low"|"High"> }`
 - `entryRegs`: 解析開始時に EqLow で初期化するレジスタ名の配列
 - `entryNodeId`: 開始ノード ID（省略時は先頭ノード）
@@ -32,17 +33,18 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 - `maxSpeculationDepth`: 投機コンテキストのネスト深さ上限（デフォルト 20）。閾値を超えると解析は継続するが、該当 `spec-begin` へ入らず警告を発行する。
 - VCFG ビルダー向けオプション（UI も透過的に渡す）:
   - `windowSize`: 投機ウィンドウサイズ（デフォルト 20）
+  - `speculationMode`: `"discard"` / `"stack-guard"` をそのまま渡す。`discard` 時のみ rollback エッジを生成しない。`stack-guard` は rollback エッジを保持し、解析側でスタック整合を検査する。
 
 ### 1.2 AnalysisResult スキーマ（UI が前提する形）
 
-- 互換キー: `schemaVersion = "1.1.0"`
-- `graph: StaticGraph` — ノード/エッジと種類（ns/spec/rollback）。VCFG は meta 表現のみで、NS ノードを共有し分岐ごとに `spec-begin/spec-end` メタノードを spec エッジで挟む（spec ノードは meta ノードのみ生成）。  
+- 互換キー: `schemaVersion = "1.2.0"`
+- `graph: StaticGraph` — ノード/エッジと種類（ns/spec/rollback）。VCFG は meta 表現のみで、NS ノードを共有し分岐ごとに `spec-begin/spec-end` メタノードを spec エッジで挟む（spec ノードは meta ノードのみ生成）。`speculationMode` が `discard` の場合は rollback エッジを生成しない。  
 - `trace.steps[]` — 各ステップの `{ stepId, nodeId, description, executionMode, state, isViolation }`。  
 - `state.sections[]` — 汎用セクション配列。`data` は任意キーに `DisplayValue{ label, style }` を紐付ける。`alert` でセクション単位の強調可。  
 - `result` — `"Secure"` または `"SNI_Violation"` をヘッダーでバッジ表示。  
 - `traceMode` — `"bfs"`（到達順）または `"single-path"`（1 経路を連続して展開）。UI デフォルトは後者。  
 - `error?` — `type/message` を持つ。Toast で surfaced し、トレースが 1 件以上あれば結果を保持したまま最後のステップを表示する。トレースが空の場合のみ結果を破棄し、画面を未解析状態へ戻す。
-- `warnings?` — 致命的ではないが通知したい事項の配列。現状は `MaxSpeculationDepth` のみをサポートし、UI はバッジと Toast でユーザーに周知する。
+- `warnings?` — 致命的ではないが通知したい事項の配列。現状は `MaxSpeculationDepth` のみをサポートし、UI はバッジと Toast でユーザーに周知する（投機モード `discard` / `stack-guard` の別なく上限到達時に発火）。
 
 スキーマの一次ソースは `lib/analysis-schema/index.ts` を参照し、UI コードは同型にのみ依存する。
 
@@ -71,9 +73,10 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
   - Prev / Next: ステップ境界で活性/非活性を切替。  
   - Auto Play: 800ms 間隔でステップ前進。`isViolation` または末尾到達で自動停止。  
   - ステップ表示: `Step (current+1) / max`。未解析時は `--/--`。
+  - 投機モード選択: `discard` / `stack-guard` をセレクトで切替。  
 - **CodeEditor**: MuASM テキストエリアを単一 Accordion で折りたたみ可能にしたもの。デモコードリセットボタン付き。入力変更はソースだけを更新し、解析結果は保持したまま。  
-- **VCFGView**: React Flow で VCFG を描画。`type` で色分け（ns=青、spec=橙、rollback=赤）し、`activeNodeId` を太枠＋淡青背景で強調。VCFG は meta 仕様で生成されるため、NS ノード共有＋ spec-begin/end メタノード構造を描画する。データが無い場合はプレースホルダ。左ペイン下部に配置し、`flex-1` + `min-h` で列の残り高さを占有する。  
-- **StateViewer**: `sections` を反復描画。`alert` で赤枠＋ALERT バッジ、`DisplayValue.style` を色付きバッジで表示。データが無い場合はプレースホルダ。右ペイン下部に配置。
+- **VCFGView**: React Flow で VCFG を描画。`type` で色分け（ノード: ns=青・spec=橙／エッジ: ns=グレー・spec=橙・rollback=赤）し、`activeNodeId` を太枠＋淡青背景で強調。VCFG は meta 仕様で生成されるため、NS ノード共有＋ spec-begin/end メタノード構造を描画する。データが無い場合はプレースホルダ。左ペイン下部に配置し、`flex-1` + `min-h` で列の残り高さを占有する。  
+- **StateViewer**: `sections` を反復描画。`alert` で赤枠＋ALERT バッジ、`DisplayValue.style` を色付きバッジで表示。データが無い場合はプレースホルダ。右ペイン下部に配置。投機スタック表示はスタックが非空ならモードに関係なく描画され、`MaxSpeculationDepth` 警告は両モードで発生しうる（深さ上限で新規 spec-begin への突入をスキップ）。
 - **Toast (sonner)**: 解析失敗時にエラー文言を表示し、「再解析」アクションで再実行できる。`warnings` は Warning Toast で告知し、JSON 文字列化したシグネチャで重複送出を抑止する。
 
 ### 2.3 レイアウト概要（現行実装の意図）

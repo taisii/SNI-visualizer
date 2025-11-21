@@ -20,9 +20,9 @@
    - 方針: 編集開始で `setResult(null); setCurrentStep(0);` を行い、トレースの不整合を防ぐ。  
    - DOD: 編集→右ペインがプレースホルダに戻り、再解析まで Prev/Next は無効。
 2. **エラー時のUI挙動のテスト追加**  
-   - 現状は例外時に `setResult(null)` で VCFG/State をクリアしプレースホルダに戻している（`app/(analysis)/page.tsx:51-74`）。  
-   - 方針: この挙動を E2E で回帰テストし、ボタン活性（Prev/Next/Auto Play が無効化されること）も確認する。  
-   - DOD: 解析失敗フィクスチャで、Toast 表示と同時に画面が「未解析」表示に戻ることを Playwright で確認。
+   - 現状: 解析エラーでもトレースが 1 件以上あれば結果を保持し末尾ステップへジャンプし、完全失敗時のみ `setResult(null)` で未解析に戻す（`app/(analysis)/page.tsx:93-139`）。  
+   - 方針: この実装挙動を E2E で固定し、部分結果保持とボタン活性（Prev/Next/Auto Play が適切に無効化されること）を確認する。  
+   - DOD: 解析失敗フィクスチャで Toast 表示と同時に、トレース有りなら末尾ステップ表示を維持／トレース無しなら未解析に戻ることを Playwright で確認。
 3. **Auto Play のガード改善**  
    - 末尾停止と違反停止は実装済み (`app/(analysis)/page.tsx:34-44`)。  
    - 方針: `result` 消失時も interval を確実にクリアし、ステップ 0 に戻すテストを追加。  

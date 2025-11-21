@@ -7,6 +7,7 @@ import {
   Play,
 } from "lucide-react";
 import type { TraceMode } from "@/lib/analysis-schema";
+import type { SpeculationMode } from "@/sni-engine";
 
 type Props = {
   canPrev: boolean;
@@ -14,6 +15,7 @@ type Props = {
   isLoading: boolean;
   isAutoPlay: boolean;
   traceMode: TraceMode;
+  speculationMode: SpeculationMode;
   currentStep: number;
   maxStep: number;
   onAnalyze: () => void;
@@ -24,6 +26,7 @@ type Props = {
   onReset: () => void;
   onToggleAutoPlay: () => void;
   onTraceModeChange: (mode: TraceMode) => void;
+  onSpeculationModeChange: (mode: SpeculationMode) => void;
 };
 
 export function ControlPanel({
@@ -32,6 +35,7 @@ export function ControlPanel({
   isLoading,
   isAutoPlay,
   traceMode,
+  speculationMode,
   currentStep,
   maxStep,
   onAnalyze,
@@ -42,6 +46,7 @@ export function ControlPanel({
   onReset,
   onToggleAutoPlay,
   onTraceModeChange,
+  onSpeculationModeChange,
 }: Props) {
   return (
     <div className="flex flex-col gap-3 rounded border border-neutral-200 bg-neutral-50 p-3">
@@ -67,7 +72,7 @@ export function ControlPanel({
             : `Step ${currentStep + 1} / ${maxStep}`}
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
         <label className="text-xs text-neutral-700">
           トレースモード:
           <select
@@ -78,8 +83,24 @@ export function ControlPanel({
             }
             disabled={isLoading}
           >
-            <option value="single-path">1経路ずつ（デフォルト）</option>
-            <option value="bfs">到達順（BFS）</option>
+            <option value="single-path">DFS</option>
+            <option value="bfs">BFS</option>
+          </select>
+        </label>
+        <label className="text-xs text-neutral-700">
+          投機モード:
+          <select
+            className="ml-2 rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
+            value={speculationMode}
+            onChange={(e) =>
+              onSpeculationModeChange(
+                e.target.value as SpeculationMode,
+              )
+            }
+            disabled={isLoading}
+          >
+            <option value="discard">復帰なし</option>
+            <option value="stack-guard">スタック検証</option>
           </select>
         </label>
 

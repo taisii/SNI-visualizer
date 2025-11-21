@@ -40,12 +40,14 @@ export async function analyze(
   options: RunnerOptions = {},
 ): Promise<AnalysisResult> {
   const traceMode = options.traceMode ?? "single-path";
+  const speculationMode = options.speculationMode ?? "stack-guard";
   try {
     const graph = buildVCFG(sourceCode, {
       windowSize: options.windowSize,
+      speculationMode,
     });
     const { windowSize: _omitWin, ...engineOpts } = options;
-    return await analyzeVCFG(graph, { ...engineOpts, traceMode });
+    return await analyzeVCFG(graph, { ...engineOpts, traceMode, speculationMode });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "解析で例外が発生しました";

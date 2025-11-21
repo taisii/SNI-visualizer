@@ -49,7 +49,6 @@ const detailStyleOf = (
       return "danger";
     case "Diverge":
       return "info";
-    case "Bot":
     default:
       return "neutral";
   }

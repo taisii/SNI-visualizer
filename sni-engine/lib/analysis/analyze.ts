@@ -36,19 +36,28 @@ export type AnalyzeOptions = {
   maxSteps?: number;
   traceMode?: TraceMode;
   maxSpeculationDepth?: number;
+  speculationMode?: SpeculationMode;
 };
+
+export type SpeculationMode = "discard" | "stack-guard";
 
 const DEFAULT_CAP = 10_000;
 const DEFAULT_MAX_STEPS = 10_000;
 const DEFAULT_TRACE_MODE: TraceMode = "bfs";
 const DEFAULT_MAX_SPECULATION_DEPTH = 20;
+const DEFAULT_SPECULATION_MODE: SpeculationMode = "stack-guard";
 
 type ContextStack = readonly string[];
 
-const makeModeKey = (mode: ExecutionMode, stack: ContextStack): string =>
-  mode === "NS"
-    ? "NS"
-    : `Speculative|${stack.length === 0 ? "root" : stack.join("::")}`;
+const makeModeKey = (
+  mode: ExecutionMode,
+  stack: ContextStack,
+  stackKey: (stack: ContextStack) => string,
+): string =>
+  mode === "NS" ? "NS" : `Speculative|${stackKey(stack)}`;
+
+const makeStackKey = (stack: ContextStack) =>
+  stack.length === 0 ? "root" : stack.join("::");
 
 const pushContext = (stack: ContextStack, ctxId?: string): ContextStack => {
   if (!ctxId) return stack;
@@ -100,6 +109,10 @@ export async function analyzeVCFG(
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
   const maxSpeculationDepth =
     opts.maxSpeculationDepth ?? DEFAULT_MAX_SPECULATION_DEPTH;
+  const speculationMode = opts.speculationMode ?? DEFAULT_SPECULATION_MODE;
+  const discardSpec = speculationMode === "discard";
+  const stackGuardEnabled = speculationMode === "stack-guard";
+  const stackKeyFn = makeStackKey;
   const speculationDepthWarned = new Set<string>();
   const nodeMap = new Map(graph.nodes.map((n) => [n.id, n] as const));
   const usedRegs = collectRegisterNames(graph);
@@ -118,7 +131,7 @@ export async function analyzeVCFG(
   const entryMode: ExecutionMode =
     entryNode.type === "spec" ? "Speculative" : "NS";
   const entryStack = deriveInitialStack(entryNode, entryMode);
-  const entryModeKey = makeModeKey(entryMode, entryStack);
+  const entryModeKey = makeModeKey(entryMode, entryStack, stackKeyFn);
   ensureState(entryNode.id, entryModeKey);
   const seededInit = initState(opts.policy, opts.entryRegs);
   seedRegs(seededInit, usedRegs);
@@ -143,13 +156,14 @@ export async function analyzeVCFG(
   const stepLogs: TraceStep[] = [];
   let stepId = 0;
 
-  const init = states.get(entryNode.id)?.get(entryMode) ?? bottomState();
+  const init =
+    states.get(entryNode.id)?.get(entryModeKey) ?? bottomState();
   stepLogs.push({
     stepId,
     nodeId: "", // entry はどのノードにもフォーカスさせない
     description: "(entry)",
     executionMode: entryMode,
-    state: stateToSections(init),
+    state: stateToSections(init, entryStack),
     isViolation: stateHasViolation(init),
   });
 
@@ -159,7 +173,7 @@ export async function analyzeVCFG(
     const { nodeId, executionMode, stack } = shifted;
     const node = nodeMap.get(nodeId);
     if (!node) continue;
-    const modeKey = makeModeKey(executionMode, stack);
+    const modeKey = makeModeKey(executionMode, stack, stackKeyFn);
     const inState = ensureState(nodeId, modeKey);
     seedRegs(inState, usedRegs);
 
@@ -205,7 +219,7 @@ export async function analyzeVCFG(
       nodeId,
       description: node.label ?? "",
       executionMode,
-      state: stateToSections(outState),
+      state: stateToSections(outState, stack),
       isViolation: violation,
     });
 
@@ -225,6 +239,12 @@ export async function analyzeVCFG(
       const tgtId = e.target;
       const targetNode = nodeMap.get(tgtId);
       const isSpecNode = targetNode?.type === "spec";
+
+      if (discardSpec && e.type === "rollback") {
+        // discard モードでは rollback へ遷移しない
+        continue;
+      }
+
       if (e.type === "spec" && executionMode !== "Speculative") {
         if (!isSpecNode) {
           // NS 実行中は meta ノードを経由しない spec エッジを無視
@@ -232,6 +252,18 @@ export async function analyzeVCFG(
         }
         if (targetNode.specContext?.phase === "end") {
           // spec-end は投機中のみ訪問可能
+          continue;
+        }
+      }
+
+      if (
+        stackGuardEnabled &&
+        e.type === "spec" &&
+        targetNode?.specContext?.phase === "end"
+      ) {
+        const top = stack.at(-1);
+        if (!top || top !== targetNode.specContext.id) {
+          // 異なるコンテキストの spec-end への突入を拒否
           continue;
         }
       }
@@ -274,7 +306,11 @@ export async function analyzeVCFG(
         targetExecutionMode = popped.length > 0 ? "Speculative" : "NS";
       }
 
-      const targetModeKey = makeModeKey(targetExecutionMode, nextStack);
+      const targetModeKey = makeModeKey(
+        targetExecutionMode,
+        nextStack,
+        stackKeyFn,
+      );
       const existingStates = states.get(tgtId);
       const hadState = existingStates?.has(targetModeKey) ?? false;
       const tgtState = ensureState(tgtId, targetModeKey);

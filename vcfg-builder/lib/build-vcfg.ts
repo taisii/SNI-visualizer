@@ -21,13 +21,13 @@ export function buildVCFGFromProgram(
   program: Program,
   options: BuildOptions = 20,
 ): StaticGraph {
-  const { windowSize } = normalizeOptions(options);
+  const { windowSize, speculationMode } = normalizeOptions(options);
   const ctx = createProgramContext(program);
   const graph = new GraphBuilder();
 
   emitBaseNodes(ctx, graph);
 
-  buildMeta(ctx, graph, windowSize);
+  buildMeta(ctx, graph, windowSize, speculationMode);
 
   return graph.toGraph();
 }
