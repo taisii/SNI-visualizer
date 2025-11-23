@@ -17,10 +17,7 @@ import {
   initState,
 } from "../core/state";
 import { validateGraph, getEntryNode, getAdj } from "./graph";
-import {
-  applyInstruction,
-  type ExecMode as ExecutionMode,
-} from "../semantics";
+import { applyInstruction, type ExecMode as ExecutionMode } from "../semantics";
 import {
   mergeState,
   seedRegs,
@@ -73,10 +70,7 @@ const makeStackKey = (stack: ContextStack) =>
 const makeWindowKey = (stack: SpecWindowStack) =>
   stack.length === 0 ? "root" : stack.join("::");
 
-const decrementTop = (
-  stack: SpecWindowStack,
-  delta = 1,
-): SpecWindowStack => {
+const decrementTop = (stack: SpecWindowStack, delta = 1): SpecWindowStack => {
   if (stack.length === 0) return stack;
   const next = [...stack];
   next[next.length - 1] = next[next.length - 1] - delta;
@@ -253,17 +247,14 @@ export async function analyzeVCFG(
   const stepLogs: TraceStep[] = [];
   let stepId = 0;
 
-  const init =
-    states.get(entryNode.id)?.get(entryModeKey) ?? bottomState();
+  const init = states.get(entryNode.id)?.get(entryModeKey) ?? bottomState();
   stepLogs.push({
     stepId,
     nodeId: "", // entry はどのノードにもフォーカスさせない
     description: "(entry)",
     executionMode: entryMode,
     specWindowRemaining:
-      specWindowActive && entryMode === "Speculative"
-        ? specWindow
-        : undefined,
+      specWindowActive && entryMode === "Speculative" ? specWindow : undefined,
     state: stateToSections(init, {
       specStack: entryStack,
       specContextInfo,
@@ -415,10 +406,7 @@ export async function analyzeVCFG(
             ? targetNode.specContext.id
             : undefined;
 
-        if (
-          contextIdToPush &&
-          stack.length >= maxSpeculationDepth
-        ) {
+        if (contextIdToPush && stack.length >= maxSpeculationDepth) {
           const warnKey = `${contextIdToPush}:${stack.length}`;
           if (!speculationDepthWarned.has(warnKey)) {
             speculationDepthWarned.add(warnKey);
@@ -484,11 +472,12 @@ export async function analyzeVCFG(
 
       const { changed } =
         e.type === "rollback"
-          ? mergeState(
-              tgtState,
-              extractObservations(outState),
-              { regs: false, mem: false, obsMem: true, obsCtrl: true },
-            )
+          ? mergeState(tgtState, extractObservations(outState), {
+              regs: false,
+              mem: false,
+              obsMem: true,
+              obsCtrl: true,
+            })
           : mergeState(tgtState, outState);
       const needsVisit = changed || !hadState;
       if (needsVisit) {

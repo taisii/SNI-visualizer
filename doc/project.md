@@ -11,7 +11,7 @@
 - 中核技術: VCFG（仮想制御フローグラフ） + 抽象解釈 + Always-Mispredict 投機モデル。
 - 主要コンポーネント:
   - Web UI (Next.js) — `app/(analysis)/*`
-  - VCFG ビルダー — `vcfg-builder/lib/*`（エントリ `lib/build-vcfg.ts`、`specMode` に応じて legacy-meta / light を切替）
+  - VCFG ビルダー — `vcfg-builder/lib/*`（エントリ `lib/build-vcfg.ts`、`specMode` に応じて legacy-meta / light を切替。discard 時は spec-end/rollback を生成しない）
   - SNI 解析コア — `sni-engine/lib/analysis/analyze.ts`
   - 共通スキーマ / ファサード — `lib/analysis-schema`, `lib/analysis-engine`
 
@@ -19,7 +19,7 @@
 
 ## 2. 実装の現状
 - スキーマ: `StaticGraph` / `AnalysisResult` を `lib/analysis-schema/index.ts` に集約。ノードは AST (`instructionAst`) を保持し、UI・エンジン双方が同一構造に依存する。
-- VCFG ビルダー (`vcfg-builder/lib/build-vcfg.ts`): MuASM をパースし `specMode` に応じた VCFG を生成（UI/CLI のデフォルトは `light`）。`legacy-meta` は従来通り投機パスを前展開し、`light` は分岐ごとに spec-begin/spec-end を 1 組だけ付与した軽量 CFG を出力する（投機長はエンジン側 `specWindow` で管理）。discard モード時は rollback を生成しない。
+- VCFG ビルダー (`vcfg-builder/lib/build-vcfg.ts`): MuASM をパースし `specMode` に応じた VCFG を生成（UI/CLI のデフォルトは `light`）。`legacy-meta` は従来通り投機パスを前展開し、`light` は分岐ごとに spec-begin/spec-end を 1 組だけ付与した軽量 CFG を出力する（投機長はエンジン側 `specWindow` で管理）。`speculationMode="discard"` では rollback と spec-end を生成しない（spec-begin は可視化用に残す）。
 - 解析コア (`sni-engine/lib/analysis/analyze.ts`): AST 優先で命令を評価し、NS/SP 二成分の抽象状態と観測履歴を保持。ワークリスト順序は `traceMode` で BFS/LIFO を切替える。`iterationCap`=10,000、`maxSteps`=10,000 に達すると `AnalysisError` として打ち切る。`maxSpeculationDepth`（デフォルト 20）を超えると `MaxSpeculationDepth` 警告を積んで該当 spec-begin をスキップするが、それ以外は継続する。`speculationMode` は `discard`（既定）/`stack-guard` をサポートし、discard では rollback エッジを無視、stack-guard では spec-end のスタック整合を検査する。
 - Web UI (`app/(analysis)/*`): `doc/web-spec.md` の仕様に従い、`analyze(source, options)` の薄いファサードで VCFG/抽象状態を描画する。ポリシー入力 UI は未配線で、入力編集時に結果を保持する制約が残っている。詳細な UI 挙動は `doc/web-spec.md` を参照。
 - テスト: `vcfg-builder/tests` で AST 付与や投機展開、`sni-engine/tests` で漏洩検出やガード、`lib/analysis-engine/tests` で traceMode 伝播などをカバー。UI も `app/(analysis)/features/visualization/*.test.ts` で色分けやレイアウトをユニットテストしているが、E2E 自動化は未整備。

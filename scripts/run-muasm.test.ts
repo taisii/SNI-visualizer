@@ -10,11 +10,9 @@ import { promises as fs } from "node:fs";
 import { parseArgs, runSingleCase } from "./run-muasm";
 
 describe("run-muasm CLI options", () => {
-  beforeEach(() => {
-  });
+  beforeEach(() => {});
 
-  afterEach(() => {
-  });
+  afterEach(() => {});
 
   it("defaults to bfs / discard / light", () => {
     const parsed = parseArgs([]);

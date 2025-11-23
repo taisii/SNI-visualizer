@@ -55,7 +55,9 @@ describe("ELK レイアウト入力", () => {
 
     expect(nsOrder).toEqual(expectedOrder);
     expect(
-      (elkGraph.children ?? []).some((child) => typeById.get(child.id) === "spec"),
+      (elkGraph.children ?? []).some(
+        (child) => typeById.get(child.id) === "spec",
+      ),
     ).toBe(true);
   });
 
@@ -64,9 +66,13 @@ describe("ELK レイアウト入力", () => {
     const elkGraph = buildElkGraph(graph);
 
     const elk = new ELK();
-    const layout = await elk.layout(elkGraph, { layoutOptions: elkLayoutOptions });
+    const layout = await elk.layout(elkGraph, {
+      layoutOptions: elkLayoutOptions,
+    });
 
-    const typeById = new Map(graph.nodes.map((node) => [node.id, node.type] as const));
+    const typeById = new Map(
+      graph.nodes.map((node) => [node.id, node.type] as const),
+    );
     const nsChildren = (layout.children ?? []).filter(
       (child) => typeById.get(child.id) === "ns",
     );

@@ -226,7 +226,9 @@ describe("analyzeVCFG", () => {
     const graph = buildVCFG(program, { windowSize: 5 });
 
     const res = await analyzeVCFG(graph, { traceMode: "single-path" });
-    const firstSpecStep = res.trace.steps.find((s) => s.executionMode === "Speculative");
+    const firstSpecStep = res.trace.steps.find(
+      (s) => s.executionMode === "Speculative",
+    );
     expect(firstSpecStep).toBeDefined();
     const node = graph.nodes.find((n) => n.id === firstSpecStep?.nodeId);
     expect(node?.type).toBe("spec");
@@ -540,9 +542,7 @@ describe("analyzeVCFG", () => {
       (s) => s.nodeId === "s1" && s.executionMode === "Speculative",
     );
     expect(specAssign).toBeDefined();
-    const regsSection = specAssign?.state.sections.find(
-      (s) => s.id === "regs",
-    );
+    const regsSection = specAssign?.state.sections.find((s) => s.id === "regs");
     const rDetail = regsSection?.data.r.detail;
     expect(rDetail?.ns).toBe("Low");
     expect(rDetail?.sp).toBe("High");
@@ -697,7 +697,10 @@ L11:
   beqz y, Loop
 `;
     const graph = buildVCFG(code);
-    const res = await analyzeVCFG(graph, { iterationCap: 2000, maxSteps: 2000 });
+    const res = await analyzeVCFG(graph, {
+      iterationCap: 2000,
+      maxSteps: 2000,
+    });
     expect(res.error).toBeUndefined();
   });
 
@@ -756,10 +759,7 @@ L11:
 
   it("returns partial trace when maxSteps is exceeded", async () => {
     const graph: StaticGraph = {
-      nodes: [
-        baseNode("n0", 0, "ns", "skip"),
-        baseNode("n1", 1, "ns", "skip"),
-      ],
+      nodes: [baseNode("n0", 0, "ns", "skip"), baseNode("n1", 1, "ns", "skip")],
       edges: [edge("n0", "n1", "ns"), edge("n1", "n0", "ns")],
     };
 
@@ -942,10 +942,7 @@ L11:
 
   it("returns partial trace when iterationCap is exceeded", async () => {
     const graph: StaticGraph = {
-      nodes: [
-        baseNode("n0", 0, "ns", "skip"),
-        baseNode("n1", 1, "ns", "skip"),
-      ],
+      nodes: [baseNode("n0", 0, "ns", "skip"), baseNode("n1", 1, "ns", "skip")],
       edges: [edge("n0", "n1", "ns"), edge("n1", "n0", "ns")],
     };
 

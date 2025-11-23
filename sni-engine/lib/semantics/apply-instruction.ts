@@ -102,8 +102,7 @@ export function applyInstruction(
         ns: joinSecurity(lVal.ns, lAddr.ns),
         sp: joinSecurity(lVal.sp, lAddr.sp),
       };
-      const observedPoint =
-        executionMode === "NS" ? lAddr.ns : lAddr.sp;
+      const observedPoint = executionMode === "NS" ? lAddr.ns : lAddr.sp;
       observeMem(isHighLike(observedPoint) ? "EqHigh" : "EqLow");
       setValue("reg", ast.dest, v);
       break;
@@ -115,8 +114,7 @@ export function applyInstruction(
         ns: joinSecurity(lVal.ns, lAddr.ns),
         sp: joinSecurity(lVal.sp, lAddr.sp),
       };
-      const observedPoint =
-        executionMode === "NS" ? lAddr.ns : lAddr.sp;
+      const observedPoint = executionMode === "NS" ? lAddr.ns : lAddr.sp;
       observeMem(isHighLike(observedPoint) ? "EqHigh" : "EqLow");
       setValue("mem", defaultMemLabel(ast.addr), v);
       break;
@@ -141,22 +139,12 @@ export function applyInstruction(
     }
     case "jmp": {
       const targetLevel = evalExpr(state, ast.target);
-      const observed = executionMode === "NS"
-        ? targetLevel.ns
-        : targetLevel.sp;
+      const observed = executionMode === "NS" ? targetLevel.ns : targetLevel.sp;
       const targetObsId = toControlTargetObsId(node.pc, ast.target);
       if (executionMode === "NS") {
-        updateCtrlObsNS(
-          next,
-          targetObsId,
-          securityToLattice(observed),
-        );
+        updateCtrlObsNS(next, targetObsId, securityToLattice(observed));
       } else {
-        updateCtrlObsSpec(
-          next,
-          targetObsId,
-          securityToLattice(observed),
-        );
+        updateCtrlObsSpec(next, targetObsId, securityToLattice(observed));
       }
       break;
     }
@@ -168,7 +156,11 @@ export function applyInstruction(
   return next;
 }
 
-function getJoinOfCondAndVal(state: AbsState, cond: Expr, value: Expr): RelValue {
+function getJoinOfCondAndVal(
+  state: AbsState,
+  cond: Expr,
+  value: Expr,
+): RelValue {
   return joinPair(evalExpr(state, cond), evalExpr(state, value));
 }
 

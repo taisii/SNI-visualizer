@@ -29,7 +29,9 @@ describe("stateToSections", () => {
 
   it("adds specStack section when stack is given", () => {
     const stack = ["specA", "specB"];
-    const sections = stateToSections(makeState(), { specStack: stack }).sections;
+    const sections = stateToSections(makeState(), {
+      specStack: stack,
+    }).sections;
     const specSection = sections.find((s) => s.id === "specStack");
     expect(specSection).toBeDefined();
     expect(specSection?.data.d2.label).toBe("specA");

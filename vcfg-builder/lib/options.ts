@@ -3,18 +3,16 @@ import type { BuildOptions, NormalizedOptions } from "../types";
 export function normalizeOptions(
   options: BuildOptions = 20,
 ): NormalizedOptions {
-  const mode =
-    typeof options === "number" ? "meta" : options.mode ?? "meta";
-  const rawWindow =
-    typeof options === "number" ? options : options.windowSize;
-  const windowSize = mode === "meta" ? rawWindow ?? 20 : undefined;
+  const mode = typeof options === "number" ? "meta" : (options.mode ?? "meta");
+  const rawWindow = typeof options === "number" ? options : options.windowSize;
+  const windowSize = mode === "meta" ? (rawWindow ?? 20) : undefined;
   const speculationMode =
     typeof options === "number"
       ? "discard"
-      : options.speculationMode ?? "discard";
+      : (options.speculationMode ?? "discard");
 
   const allowed = ["discard", "stack-guard"] as const;
-  if (!allowed.includes(speculationMode as typeof allowed[number])) {
+  if (!allowed.includes(speculationMode as (typeof allowed)[number])) {
     throw new Error(
       `speculationMode は discard|stack-guard のいずれかを指定してください (got: ${String(
         speculationMode,

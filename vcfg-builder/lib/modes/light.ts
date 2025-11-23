@@ -99,12 +99,15 @@ export function buildLight(
         "begin",
         specContextId,
       );
-      const endId = addMetaNode(
-        `${currentNodeId}:spec-end`,
-        `spec-end ${condLabelTaken}/${condLabelNotTaken}`,
-        "end",
-        specContextId,
-      );
+      let endId: string | undefined;
+      if (speculationMode !== "discard") {
+        endId = addMetaNode(
+          `${currentNodeId}:spec-end`,
+          `spec-end ${condLabelTaken}/${condLabelNotTaken}`,
+          "end",
+          specContextId,
+        );
+      }
 
       graph.addEdge({
         source: currentNodeId,
@@ -129,8 +132,8 @@ export function buildLight(
         });
       }
       // 明示的に「今すぐロールバックする」経路も 1 本持たせておく
-      graph.addEdge({ source: beginId, target: endId, type: "spec" });
-      if (speculationMode !== "discard") {
+      if (speculationMode !== "discard" && endId) {
+        graph.addEdge({ source: beginId, target: endId, type: "spec" });
         graph.addEdge({
           source: endId,
           target: currentNodeId,

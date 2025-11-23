@@ -201,7 +201,9 @@ export function StateViewer({ state, graph }: Props) {
 
   return (
     <div className="flex h-full flex-col gap-3 rounded border border-neutral-200 bg-white p-3">
-      <div className="text-sm font-semibold text-neutral-800">Abstract State</div>
+      <div className="text-sm font-semibold text-neutral-800">
+        Abstract State
+      </div>
       <div className="flex flex-col gap-3">
         {state.sections.map((section) => {
           // 専用 UI: Speculation Stack はセクションごと Accordion で折りたたみ
@@ -239,10 +241,7 @@ export function StateViewer({ state, graph }: Props) {
                   }
                   className="space-y-0"
                 >
-                  <AccordionItem
-                    value={section.id}
-                    className="border-0"
-                  >
+                  <AccordionItem value={section.id} className="border-0">
                     <AccordionTrigger className="px-0 py-1 text-sm font-semibold text-neutral-800 hover:no-underline">
                       {section.title}
                     </AccordionTrigger>
@@ -276,9 +275,7 @@ export function StateViewer({ state, graph }: Props) {
           );
 
           const detailByPosition = new Map(
-            entries
-              .filter((e) => e.hasDetail)
-              .map((e) => [e.position, e]),
+            entries.filter((e) => e.hasDetail).map((e) => [e.position, e]),
           );
 
           const pairMap = new Map<string, string | null>();
@@ -337,7 +334,8 @@ export function StateViewer({ state, graph }: Props) {
                   {section.title}
                 </div>
                 <div className="flex items-center gap-2">
-                  {section.id === "regs" && detailItemValues.length > 0 && (
+                  {section.id === "regs" &&
+                    detailItemValues.length > 0 &&
                     (() => {
                       const allOpen =
                         openValues.length === detailItemValues.length;
@@ -349,7 +347,10 @@ export function StateViewer({ state, graph }: Props) {
                           className="flex items-center gap-1 rounded border border-neutral-300 px-2 py-1 text-[11px] text-neutral-700 hover:bg-white"
                           aria-label={allOpen ? "Close all" : "Open all"}
                           onClick={() =>
-                            updateSectionOpenValues(section.id, () => nextValues)
+                            updateSectionOpenValues(
+                              section.id,
+                              () => nextValues,
+                            )
                           }
                         >
                           <ChevronDownIcon
@@ -359,8 +360,7 @@ export function StateViewer({ state, graph }: Props) {
                           />
                         </button>
                       );
-                    })()
-                  )}
+                    })()}
                   {section.alert && (
                     <span className="text-xs font-semibold text-red-700">
                       ALERT

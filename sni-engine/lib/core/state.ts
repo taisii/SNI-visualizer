@@ -60,19 +60,13 @@ export function initState(
 
   if (policy?.regs) {
     for (const [k, lvl] of Object.entries(policy.regs)) {
-      regs.set(
-        k,
-        lvl === "Low" ? defaultRegRel() : { ns: "High", sp: "High" },
-      );
+      regs.set(k, lvl === "Low" ? defaultRegRel() : { ns: "High", sp: "High" });
     }
   }
 
   if (policy?.mem) {
     for (const [k, lvl] of Object.entries(policy.mem)) {
-      mem.set(
-        k,
-        lvl === "Low" ? defaultMemRel() : { ns: "High", sp: "High" },
-      );
+      mem.set(k, lvl === "Low" ? defaultMemRel() : { ns: "High", sp: "High" });
     }
   }
 
@@ -125,7 +119,10 @@ export function latticeToSecurity(v: LatticeValue): SecurityPoint {
   }
 }
 
-export function joinSecurity(a: SecurityPoint, b: SecurityPoint): SecurityPoint {
+export function joinSecurity(
+  a: SecurityPoint,
+  b: SecurityPoint,
+): SecurityPoint {
   return latticeToSecurity(join(securityToLattice(a), securityToLattice(b)));
 }
 

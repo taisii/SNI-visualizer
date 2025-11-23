@@ -3,7 +3,6 @@ import { validateGraph } from "../lib/analysis/graph";
 import type { StaticGraph } from "@/lib/analysis-schema";
 import { getEntryNode, getAdj } from "../lib/analysis/graph";
 
-
 describe("parseGraph structural checks", () => {
   it("allows speculative graph even without rollback edge (non-fatal)", () => {
     const graph: StaticGraph = {
@@ -26,9 +25,7 @@ describe("parseGraph structural checks", () => {
     };
     expect(() => validateGraph(graph)).toThrow(/target ns node/);
   });
-  });
-
-
+});
 
 describe("graph helpers", () => {
   const graph: StaticGraph = {

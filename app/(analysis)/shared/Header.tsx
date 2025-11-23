@@ -39,7 +39,9 @@ export function Header({ result, error, warnings }: Props) {
             </span>
             {hasWarnings && (
               <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
-                {hasDepthWarning ? "投機ネスト上限により一部探索停止" : "警告あり"}
+                {hasDepthWarning
+                  ? "投機ネスト上限により一部探索停止"
+                  : "警告あり"}
               </span>
             )}
           </div>
@@ -48,7 +50,8 @@ export function Header({ result, error, warnings }: Props) {
         )}
         {hasDepthWarning && (
           <p className="text-xs text-amber-700">
-            maxSpeculationDepth を超えたため、一部の spec-begin には入っていません。
+            maxSpeculationDepth を超えたため、一部の spec-begin
+            には入っていません。
           </p>
         )}
       </div>

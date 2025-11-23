@@ -28,7 +28,10 @@ describe("analyzeVCFG stack-guard (rollback経路付き)", () => {
     const graph: StaticGraph = {
       nodes: [
         node("n0", 0, "ns", "0: ns entry"),
-        node("sb", -1, "spec", "spec-begin ctxA", { id: "ctxA", phase: "begin" }),
+        node("sb", -1, "spec", "spec-begin ctxA", {
+          id: "ctxA",
+          phase: "begin",
+        }),
         node("s1", 1, "spec", "1: spec work"),
         node("se", -2, "spec", "spec-end ctxA", { id: "ctxA", phase: "end" }),
       ],

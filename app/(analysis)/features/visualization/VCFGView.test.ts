@@ -65,7 +65,9 @@ describe("VCFGView の色分けロジック", () => {
   });
 
   it("デフォルト VCFG のステップ 1〜3 は NS の色で表示されるべき", async () => {
-    const analysis = await analyze(DEFAULT_PROGRAM, { traceMode: "single-path" });
+    const analysis = await analyze(DEFAULT_PROGRAM, {
+      traceMode: "single-path",
+    });
     const nodes = createVisualizationNodes(analysis.graph);
     const nsHighlight = baseNodeStyle("ns", true, "NS");
     const executionSteps = analysis.trace.steps.filter((step) => step.nodeId);

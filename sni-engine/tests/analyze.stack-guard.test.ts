@@ -91,7 +91,9 @@ describe("analyzeVCFG stack-guard mode", () => {
 
     const seBStep = res.trace.steps.find((s) => s.nodeId === "seB");
     expect(seBStep?.executionMode).toBe("Speculative");
-    const specSection = seBStep?.state.sections.find((s) => s.id === "specStack");
+    const specSection = seBStep?.state.sections.find(
+      (s) => s.id === "specStack",
+    );
     expect(specSection?.data.d1.label).toBe("ctxB");
     expect(specSection?.data.d2.label).toBe("ctxA");
   });

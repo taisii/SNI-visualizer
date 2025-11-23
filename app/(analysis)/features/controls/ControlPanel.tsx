@@ -101,9 +101,7 @@ export function ControlPanel({
             className="ml-2 rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
             value={speculationMode}
             onChange={(e) =>
-              onSpeculationModeChange(
-                e.target.value as SpeculationMode,
-              )
+              onSpeculationModeChange(e.target.value as SpeculationMode)
             }
             disabled={isLoading}
           >
@@ -116,9 +114,7 @@ export function ControlPanel({
           <select
             className="ml-2 rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
             value={specMode}
-            onChange={(e) =>
-              onSpecModeChange(e.target.value as SpecRunMode)
-            }
+            onChange={(e) => onSpecModeChange(e.target.value as SpecRunMode)}
             disabled={isLoading}
           >
             <option value="legacy-meta">従来(meta)</option>

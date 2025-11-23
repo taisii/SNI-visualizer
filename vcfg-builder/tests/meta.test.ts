@@ -49,9 +49,7 @@ L: skip
         .filter((e) => e.type === "spec" && e.label !== undefined)
         .map((e) => e.label),
     );
-    expect(specEdgeLabels).toEqual(
-      new Set(["spec: x != 0", "spec: x == 0"]),
-    );
+    expect(specEdgeLabels).toEqual(new Set(["spec: x != 0", "spec: x == 0"]));
 
     // rollback は NS ノードへ戻る
     const rollbackTargets = new Set(
@@ -107,6 +105,74 @@ L: skip
     expect(nsPcs.length).toBe(3);
   });
 
+  it("discard モードでは spec-end ノードを生成しない", () => {
+    const graph = buildVCFG(
+      `
+beqz x, L
+L: skip
+`,
+      { windowSize: 2, speculationMode: "discard" },
+    );
+
+    const specEnds = graph.nodes.filter(
+      (n) => n.type === "spec" && n.label?.startsWith("spec-end"),
+    );
+    expect(specEnds).toHaveLength(0);
+    expect(graph.edges.every((e) => e.type !== "rollback")).toBe(true);
+  });
+
+  it("discard モードでもネストした分岐に spec エッジを張るが spec-end/rollback は出さない", () => {
+    const graph = buildVCFG(
+      `
+beqz c1, L1
+beqz c2, L2
+skip
+L1: skip
+L2: skip
+`,
+      { windowSize: 3, speculationMode: "discard" },
+    );
+
+    const specEnds = graph.nodes.filter(
+      (n) => n.type === "spec" && n.label?.startsWith("spec-end"),
+    );
+    expect(specEnds).toHaveLength(0);
+    expect(graph.edges.every((e) => e.type !== "rollback")).toBe(true);
+
+    // ネストした分岐の NS ノードへ spec エッジが届いていることを確認
+    const specEdgeTargets = new Set(
+      graph.edges
+        .filter((e) => e.type === "spec")
+        .map((e) => e.target),
+    );
+    expect(specEdgeTargets.has("n1")).toBe(true); // 内側分岐
+    expect(specEdgeTargets.has("n3") || specEdgeTargets.has("n4")).toBe(true); // taken/untaken のどちらか
+  });
+
+  it("discard モードでは spbarr で spec トレースを打ち切り、spec-end/rollback は出さない", () => {
+    const graph = buildVCFG(
+      `
+beqz x, L
+spbarr
+skip
+L: skip
+`,
+      { windowSize: 3, speculationMode: "discard" },
+    );
+
+    const specEnds = graph.nodes.filter(
+      (n) => n.type === "spec" && n.label?.startsWith("spec-end"),
+    );
+    expect(specEnds).toHaveLength(0);
+    expect(graph.edges.every((e) => e.type !== "rollback")).toBe(true);
+
+    const specTargets = new Set(
+      graph.edges.filter((e) => e.type === "spec").map((e) => e.target),
+    );
+    expect(specTargets.has("n1")).toBe(true); // spbarr までは到達
+    expect(specTargets.has("n2")).toBe(false); // バリア以降へは伸びない
+  });
+
   it("windowSize を 1 にするとメタノード経由で即座に rollback が張られる", () => {
     const graph = buildVCFG(
       `
@@ -144,9 +210,9 @@ beqz cond, L0
       .filter((n) => n.type === "spec" && n.label?.startsWith("spec-begin"))
       .map((n) => n.label ?? "");
 
-    expect(specBeginLabels.some((label) => label.includes("spec: cond == 0"))).toBe(
-      true,
-    );
+    expect(
+      specBeginLabels.some((label) => label.includes("spec: cond == 0")),
+    ).toBe(true);
     expect(
       specBeginLabels.some((label) => label.includes("spec: cond != 0")),
     ).toBe(false);
@@ -159,7 +225,7 @@ beqz x, L1
 skip
 L1: skip
 `,
-      { windowSize: 2 },
+      { windowSize: 2, speculationMode: "stack-guard" },
     );
 
     const specNodes = graph.nodes.filter((n) => n.type === "spec");

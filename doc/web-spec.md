@@ -41,8 +41,8 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
 
 - 互換キー: `schemaVersion = "1.2.0"`
 - `graph: StaticGraph` — ノード/エッジと種類（ns/spec/rollback）。`specMode` に応じて 2 形態を取り、結果にも `specMode` として保存する。  
-  - `light`（デフォルト）: 各分岐に `spec-begin/spec-end` を 1 組だけ付けた軽量 CFG。投機長は `specWindow` (default 20) を解析エンジンが減算し管理する。  
-  - `legacy-meta`: これまで通り NS ノード共有 + `spec-begin/spec-end` メタノードで投機区間を示し、ビルダーが前展開する。  
+  - `light`（デフォルト）: 各分岐に `spec-begin` を付け、stack-guard 時のみ `spec-end`/rollback を生成する軽量 CFG。投機長は `specWindow` (default 20) を解析エンジンが減算し管理する。  
+  - `legacy-meta`: これまで通り NS ノード共有 + `spec-begin/spec-end` メタノードで投機区間を示し、ビルダーが前展開する（discard 時は `spec-end`/rollback を省略）。  
   `speculationMode` が `discard` の場合は rollback エッジを生成しない。  
 - `trace.steps[]` — 各ステップの `{ stepId, nodeId, description, executionMode, state, isViolation, specWindowRemaining? }`。`specWindowRemaining` は light モード時に残り投機長を表示するための任意フィールド。  
 - `state.sections[]` — 汎用セクション配列。`data` は任意キーに `DisplayValue{ label, style }` を紐付ける。`alert` でセクション単位の強調可。  

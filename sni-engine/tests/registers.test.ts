@@ -34,12 +34,20 @@ describe("collectRegisterNames", () => {
   it("falls back to text tokens only when allowed", () => {
     const graph: StaticGraph = {
       nodes: [
-        { id: "n0", pc: 0, type: "ns", label: "0: assign x y", instruction: "assign x y" },
+        {
+          id: "n0",
+          pc: 0,
+          type: "ns",
+          label: "0: assign x y",
+          instruction: "assign x y",
+        },
       ],
       edges: [],
     };
 
     expect([...collectRegisterNames(graph)]).toEqual(["x", "y"]);
-    expect([...collectRegisterNames(graph, { allowTextFallback: false })]).toEqual([]);
+    expect([
+      ...collectRegisterNames(graph, { allowTextFallback: false }),
+    ]).toEqual([]);
   });
 });

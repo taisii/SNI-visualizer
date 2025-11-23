@@ -23,6 +23,8 @@ export function buildMeta(
     return `specctx${specContextSeq}`;
   };
 
+  const emitEndNodes = speculationMode !== "discard";
+
   const addMetaNode = (
     id: string,
     label: string,
@@ -176,7 +178,7 @@ export function buildMeta(
     contextId: string,
   ) {
     if (budget <= 0) {
-      if (hasPc(rollbackIndex)) {
+      if (emitEndNodes && hasPc(rollbackIndex)) {
         const endId = addMeta(
           `${prevNodeId}:${label}:end@${budget}`,
           `spec-end ${label}`,
@@ -184,20 +186,18 @@ export function buildMeta(
           contextId,
         );
         graph.addEdge({ source: prevNodeId, target: endId, type: "spec" });
-        if (speculationMode !== "discard") {
-          graph.addEdge({
-            source: endId,
-            target: `n${rollbackIndex}`,
-            type: "rollback",
-          });
-        }
+        graph.addEdge({
+          source: endId,
+          target: `n${rollbackIndex}`,
+          type: "rollback",
+        });
       }
       return;
     }
 
     const currentItem = program.instructions[currentIndex];
     if (!currentItem) {
-      if (hasPc(rollbackIndex)) {
+      if (emitEndNodes && hasPc(rollbackIndex)) {
         const endId = addMeta(
           `${prevNodeId}:${label}:end@EOF`,
           `spec-end ${label}`,
@@ -205,13 +205,11 @@ export function buildMeta(
           contextId,
         );
         graph.addEdge({ source: prevNodeId, target: endId, type: "spec" });
-        if (speculationMode !== "discard") {
-          graph.addEdge({
-            source: endId,
-            target: `n${rollbackIndex}`,
-            type: "rollback",
-          });
-        }
+        graph.addEdge({
+          source: endId,
+          target: `n${rollbackIndex}`,
+          type: "rollback",
+        });
       }
       return;
     }
@@ -223,7 +221,7 @@ export function buildMeta(
     const inst = currentItem.instr;
 
     if (nextBudget <= 0 || inst.op === "spbarr") {
-      if (hasPc(rollbackIndex)) {
+      if (emitEndNodes && hasPc(rollbackIndex)) {
         const endId = addMeta(
           `${instrNodeId}:${label}:end@${nextBudget}`,
           `spec-end ${label}`,
@@ -231,13 +229,11 @@ export function buildMeta(
           contextId,
         );
         graph.addEdge({ source: instrNodeId, target: endId, type: "spec" });
-        if (speculationMode !== "discard") {
-          graph.addEdge({
-            source: endId,
-            target: `n${rollbackIndex}`,
-            type: "rollback",
-          });
-        }
+        graph.addEdge({
+          source: endId,
+          target: `n${rollbackIndex}`,
+          type: "rollback",
+        });
       }
       return;
     }

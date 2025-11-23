@@ -59,4 +59,21 @@ L2: skip
       expect.arrayContaining(["specctx1", "specctx2"]),
     );
   });
+
+  it("discard モードでは spec-end ノードと rollback を生成しない", () => {
+    const graph = buildVCFG(
+      `
+beqz x, L
+skip
+L: skip
+`,
+      { mode: "light", speculationMode: "discard" },
+    );
+
+    const specEnds = graph.nodes.filter(
+      (n) => n.type === "spec" && n.label?.startsWith("spec-end"),
+    );
+    expect(specEnds).toHaveLength(0);
+    expect(graph.edges.every((e) => e.type !== "rollback")).toBe(true);
+  });
 });

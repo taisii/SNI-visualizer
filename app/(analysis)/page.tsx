@@ -208,7 +208,10 @@ export default function Home() {
       lastWarningsToastRef.current = null;
       return;
     }
-    if (warningsSignature && warningsSignature === lastWarningsToastRef.current) {
+    if (
+      warningsSignature &&
+      warningsSignature === lastWarningsToastRef.current
+    ) {
       return;
     }
     lastWarningsToastRef.current = warningsSignature;
@@ -225,9 +228,10 @@ export default function Home() {
       const suffix = uniqueContexts.length > 3 ? " ほか" : "";
       const depthValue = depthWarnings[0]?.detail?.maxSpeculationDepth;
       toast.warning("投機ネスト上限に達しました", {
-        description: `maxSpeculationDepth=${depthValue ?? "?"} を超えたため、一部の spec-begin をスキップしています。${
-          contextLabel ? `影響コンテキスト: ${contextLabel}${suffix}` : ""
-        }`.trim(),
+        description:
+          `maxSpeculationDepth=${depthValue ?? "?"} を超えたため、一部の spec-begin をスキップしています。${
+            contextLabel ? `影響コンテキスト: ${contextLabel}${suffix}` : ""
+          }`.trim(),
       });
       return;
     }
@@ -278,7 +282,6 @@ export default function Home() {
               activeNodeId={activeStep?.nodeId ?? null}
               activeMode={activeStep?.executionMode}
             />
-
           </div>
         </section>
 
