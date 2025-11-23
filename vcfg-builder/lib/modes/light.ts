@@ -11,7 +11,7 @@ import type { GraphBuilder } from "../graph-builder";
 export function buildLight(
   ctx: ProgramContext,
   graph: GraphBuilder,
-  speculationMode: "discard" | "stack-guard",
+  _speculationMode: "discard" = "discard",
 ) {
   const { program, resolveJump, resolveLabel, hasPc } = ctx;
 
@@ -99,16 +99,6 @@ export function buildLight(
         "begin",
         specContextId,
       );
-      let endId: string | undefined;
-      if (speculationMode !== "discard") {
-        endId = addMetaNode(
-          `${currentNodeId}:spec-end`,
-          `spec-end ${condLabelTaken}/${condLabelNotTaken}`,
-          "end",
-          specContextId,
-        );
-      }
-
       graph.addEdge({
         source: currentNodeId,
         target: beginId,
@@ -129,15 +119,6 @@ export function buildLight(
           target: `n${takenTarget}`,
           type: "spec",
           label: condLabelTaken,
-        });
-      }
-      // 明示的に「今すぐロールバックする」経路も 1 本持たせておく
-      if (speculationMode !== "discard" && endId) {
-        graph.addEdge({ source: beginId, target: endId, type: "spec" });
-        graph.addEdge({
-          source: endId,
-          target: currentNodeId,
-          type: "rollback",
         });
       }
       continue;

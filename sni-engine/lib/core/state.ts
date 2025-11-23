@@ -1,11 +1,15 @@
 import { join, type LatticeValue } from "./lattice";
 
-// ns / spec の個別成分は Leak/Diverge を取り得ない 4 値に限定する
+// ns / spec の個別成分（4値）と、その関係を表す格子値を併せて保持する
 export type SecurityPoint = "Low" | "High" | "Bot" | "Top";
 
 export type SecurityLevel = "Low" | "High";
 
-export type RelValue = { ns: SecurityPoint; sp: SecurityPoint };
+export type RelValue = {
+  ns: SecurityPoint;
+  sp: SecurityPoint;
+  rel: LatticeValue;
+};
 
 export type InitPolicy = {
   regs?: Record<string, SecurityLevel>;
@@ -60,13 +64,29 @@ export function initState(
 
   if (policy?.regs) {
     for (const [k, lvl] of Object.entries(policy.regs)) {
-      regs.set(k, lvl === "Low" ? defaultRegRel() : { ns: "High", sp: "High" });
+      if (lvl === "Low") {
+        regs.set(k, defaultRegRel());
+      } else if (lvl === "High") {
+        regs.set(k, makeRel("High", "High"));
+      } else if (lvl === "Top") {
+        regs.set(k, makeRel("Top", "Top"));
+      } else {
+        regs.set(k, makeRel("Bot", "Bot"));
+      }
     }
   }
 
   if (policy?.mem) {
     for (const [k, lvl] of Object.entries(policy.mem)) {
-      mem.set(k, lvl === "Low" ? defaultMemRel() : { ns: "High", sp: "High" });
+      if (lvl === "Low") {
+        mem.set(k, defaultMemRel());
+      } else if (lvl === "High") {
+        mem.set(k, makeRel("High", "High"));
+      } else if (lvl === "Top") {
+        mem.set(k, makeRel("Top", "Top"));
+      } else {
+        mem.set(k, makeRel("Bot", "Bot"));
+      }
     }
   }
 
@@ -82,11 +102,11 @@ export function defaultLattice(): LatticeValue {
 }
 
 export function defaultRegRel(): RelValue {
-  return { ns: "Low", sp: "Low" };
+  return makeRel("Low", "Low");
 }
 
 export function defaultMemRel(): RelValue {
-  return { ns: "High", sp: "High" };
+  return makeRel("High", "High");
 }
 
 // --- SecurityPoint と LatticeValue の橋渡し ---
@@ -128,4 +148,22 @@ export function joinSecurity(
 
 export function isHighLike(v: SecurityPoint): boolean {
   return v === "High" || v === "Top";
+}
+
+// --- RelValue 補助 ---
+export function deriveRelation(
+  ns: SecurityPoint,
+  sp: SecurityPoint,
+): LatticeValue {
+  if (ns === "Bot" || sp === "Bot") return "Bot";
+  if (ns === "Top" || sp === "Top") return "Top";
+  if (ns === "High" && sp === "High") return "EqHigh";
+  if (ns === "Low" && sp === "Low") return "EqLow";
+  if ((ns === "Low" && sp === "High") || (ns === "High" && sp === "Low"))
+    return "Leak";
+  return "Top";
+}
+
+export function makeRel(ns: SecurityPoint, sp: SecurityPoint): RelValue {
+  return { ns, sp, rel: deriveRelation(ns, sp) };
 }

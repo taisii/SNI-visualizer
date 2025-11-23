@@ -5,8 +5,8 @@ import type { AbsState } from "../lib/core/state";
 function makeState(): AbsState {
   return {
     regs: new Map([
-      ["r", { ns: "Low", sp: "High" }],
-      ["b", { ns: "Bot", sp: "Low" }],
+      ["r", { ns: "Low", sp: "High", rel: "Leak" }],
+      ["b", { ns: "Bot", sp: "Low", rel: "Top" }],
     ]),
     mem: new Map(),
     obsMem: new Map(),

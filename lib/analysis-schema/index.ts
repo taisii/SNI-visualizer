@@ -3,8 +3,6 @@ import type { Instruction as MuasmInstruction } from "@/muasm-ast";
 export const ANALYSIS_SCHEMA_VERSION = "1.2.0" as const;
 
 export type TraceMode = "bfs" | "single-path";
-export type SpecRunMode = "legacy-meta" | "light";
-export type SpeculationMode = "discard" | "stack-guard";
 
 export type AnalysisResult = {
   /** 互換性管理のためのスキーマバージョン */
@@ -19,14 +17,10 @@ export type AnalysisResult = {
   result: "Secure" | "SNI_Violation";
   /** 解析エラー情報（UI は message をユーザー向けに表示） */
   error?: AnalysisError;
-  /** エラーではないが UI で伝えたい注意事項 */
+  /** 解析を継続できたが不確定要素がある場合の警告群 */
   warnings?: AnalysisWarning[];
-  /** 現在のグラフ/投機長管理のモード */
-  specMode?: SpecRunMode;
   /** 投機ウィンドウ長 (light モード時のみ有効) */
   specWindow?: number;
-  /** 投機コンテキスト整合のモード (rollback 抑制など) */
-  speculationMode?: SpeculationMode;
 };
 
 export type AnalysisError = {
@@ -36,13 +30,11 @@ export type AnalysisError = {
 };
 
 export type AnalysisWarning = {
-  type: "MaxSpeculationDepth";
+  type: "TopObserved";
   message: string;
   detail?: {
-    contextId?: string;
     nodeId?: string;
-    maxSpeculationDepth?: number;
-    stackDepth?: number;
+    edge?: { source: string; target: string };
   };
 };
 
@@ -74,7 +66,7 @@ export type GraphNode = {
 export type GraphEdge = {
   source: string;
   target: string;
-  type: "ns" | "spec" | "rollback";
+  type: "ns" | "spec";
   label?: string;
 };
 

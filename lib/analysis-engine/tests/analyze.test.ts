@@ -3,18 +3,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { StaticGraph } from "@/lib/analysis-schema";
 import { analyze } from "../index";
 
-var buildVCFGMock: ReturnType<typeof vi.fn>;
-var analyzeVCFGMock: ReturnType<typeof vi.fn>;
+const { buildVCFGMock, analyzeVCFGMock } = vi.hoisted(() => ({
+  buildVCFGMock: vi.fn(),
+  analyzeVCFGMock: vi.fn(),
+}));
 
-vi.mock("@/vcfg-builder", () => {
-  buildVCFGMock = vi.fn();
-  return { buildVCFG: buildVCFGMock };
-});
-
-vi.mock("@/sni-engine", () => {
-  analyzeVCFGMock = vi.fn();
-  return { analyzeVCFG: analyzeVCFGMock };
-});
+vi.mock("@/vcfg-builder", () => ({ buildVCFG: buildVCFGMock }));
+vi.mock("@/sni-engine", () => ({ analyzeVCFG: analyzeVCFGMock }));
 
 describe("analysis-engine analyze", () => {
   beforeEach(() => {
@@ -35,15 +30,9 @@ describe("analysis-engine analyze", () => {
 
     await analyze("source code");
 
-    expect(buildVCFGMock).toHaveBeenCalledWith("source code", {
-      mode: "light",
-      windowSize: undefined,
-      speculationMode: "discard",
-    });
+    expect(buildVCFGMock).toHaveBeenCalledWith("source code", {});
     expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
       traceMode: "single-path",
-      speculationMode: "discard",
-      specMode: "light",
     });
   });
 
@@ -61,50 +50,14 @@ describe("analysis-engine analyze", () => {
     await analyze("source code", {
       traceMode: "bfs",
       maxSteps: 3,
-      windowSize: 10,
-      speculationMode: "discard",
+      specWindow: 10,
     });
 
-    expect(buildVCFGMock).toHaveBeenCalledWith("source code", {
-      mode: "meta",
-      windowSize: 10,
-      speculationMode: "discard",
-    });
+    expect(buildVCFGMock).toHaveBeenCalledWith("source code", {});
     expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
       traceMode: "bfs",
       maxSteps: 3,
-      speculationMode: "discard",
-      specMode: "legacy-meta",
-    });
-  });
-
-  it("light モードでは builder に mode を渡し、specWindow をエンジンへ渡す", async () => {
-    const graph: StaticGraph = { nodes: [], edges: [] };
-    buildVCFGMock.mockReturnValue(graph);
-    analyzeVCFGMock.mockResolvedValue({
-      schemaVersion: "1.2.0",
-      graph,
-      trace: { steps: [] },
-      traceMode: "single-path",
-      result: "Secure",
-    });
-
-    await analyze("src", {
-      specMode: "light",
-      specWindow: 5,
-      speculationMode: "stack-guard",
-    });
-
-    expect(buildVCFGMock).toHaveBeenCalledWith("src", {
-      mode: "light",
-      windowSize: undefined,
-      speculationMode: "stack-guard",
-    });
-    expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
-      specMode: "light",
-      specWindow: 5,
-      traceMode: "single-path",
-      speculationMode: "stack-guard",
+      specWindow: 10,
     });
   });
 

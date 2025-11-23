@@ -5,10 +5,16 @@ import {
   defaultMemRel,
   defaultRegRel,
   joinSecurity,
+  makeRel,
 } from "./state";
+import { mergeObservation } from "./observations";
 
 export function relJoin(a: RelValue, b: RelValue): RelValue {
-  return { ns: joinSecurity(a.ns, b.ns), sp: joinSecurity(a.sp, b.sp) };
+  const ns = joinSecurity(a.ns, b.ns);
+  const sp = joinSecurity(a.sp, b.sp);
+  const relMerged = join(a.rel, b.rel);
+  const rel = join(relMerged, makeRel(ns, sp).rel);
+  return { ns, sp, rel };
 }
 
 export function getReg(state: AbsState, name: string): RelValue {
@@ -51,7 +57,7 @@ export function mergeState(
     for (const [k, v] of src.regs) {
       const cur = dst.regs.get(k) ?? defaultRegRel();
       const n = relJoin(cur, v);
-      if (n.ns !== cur.ns || n.sp !== cur.sp) {
+      if (n.ns !== cur.ns || n.sp !== cur.sp || n.rel !== cur.rel) {
         dst.regs.set(k, n);
         changed = true;
       }
@@ -60,10 +66,9 @@ export function mergeState(
   if (mem) {
     for (const [k, v] of src.mem) {
       const cur = dst.mem.get(k) ?? defaultMemRel();
-      const nNs = joinSecurity(cur.ns, v.ns);
-      const nSp = joinSecurity(cur.sp, v.sp);
-      if (nNs !== cur.ns || nSp !== cur.sp) {
-        dst.mem.set(k, { ns: nNs, sp: nSp });
+      const n = relJoin(cur, v);
+      if (n.ns !== cur.ns || n.sp !== cur.sp || n.rel !== cur.rel) {
+        dst.mem.set(k, n);
         changed = true;
       }
     }
@@ -71,7 +76,7 @@ export function mergeState(
   if (obsMem) {
     for (const [k, v] of src.obsMem) {
       const cur = dst.obsMem.get(k) ?? "Bot";
-      const n = join(cur, v);
+      const n = mergeObservation(cur, v);
       if (n !== cur) {
         dst.obsMem.set(k, n);
         changed = true;
@@ -81,7 +86,7 @@ export function mergeState(
   if (obsCtrl) {
     for (const [k, v] of src.obsCtrl) {
       const cur = dst.obsCtrl.get(k) ?? "Bot";
-      const n = join(cur, v);
+      const n = mergeObservation(cur, v);
       if (n !== cur) {
         dst.obsCtrl.set(k, n);
         changed = true;
@@ -93,10 +98,20 @@ export function mergeState(
 
 export function stateHasViolation(state: AbsState): boolean {
   for (const v of state.obsMem.values()) {
-    if (v === "Leak" || v === "Top") return true;
+    if (v === "Leak") return true;
   }
   for (const v of state.obsCtrl.values()) {
-    if (v === "Leak" || v === "Top") return true;
+    if (v === "Leak") return true;
+  }
+  return false;
+}
+
+export function stateHasTop(state: AbsState): boolean {
+  for (const v of state.obsMem.values()) {
+    if (v === "Top") return true;
+  }
+  for (const v of state.obsCtrl.values()) {
+    if (v === "Top") return true;
   }
   return false;
 }

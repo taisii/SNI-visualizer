@@ -6,8 +6,7 @@ import {
   Pause,
   Play,
 } from "lucide-react";
-import type { TraceMode, SpecRunMode } from "@/lib/analysis-schema";
-import type { SpeculationMode } from "@/sni-engine";
+import type { TraceMode } from "@/lib/analysis-schema";
 
 type Props = {
   canPrev: boolean;
@@ -15,7 +14,6 @@ type Props = {
   isLoading: boolean;
   isAutoPlay: boolean;
   traceMode: TraceMode;
-  speculationMode: SpeculationMode;
   currentStep: number;
   maxStep: number;
   onAnalyze: () => void;
@@ -26,10 +24,7 @@ type Props = {
   onReset: () => void;
   onToggleAutoPlay: () => void;
   onTraceModeChange: (mode: TraceMode) => void;
-  onSpeculationModeChange: (mode: SpeculationMode) => void;
-  specMode: SpecRunMode;
   specWindow: number;
-  onSpecModeChange: (mode: SpecRunMode) => void;
   onSpecWindowChange: (value: number) => void;
 };
 
@@ -39,7 +34,6 @@ export function ControlPanel({
   isLoading,
   isAutoPlay,
   traceMode,
-  speculationMode,
   currentStep,
   maxStep,
   onAnalyze,
@@ -50,10 +44,7 @@ export function ControlPanel({
   onReset,
   onToggleAutoPlay,
   onTraceModeChange,
-  onSpeculationModeChange,
-  specMode,
   specWindow,
-  onSpecModeChange,
   onSpecWindowChange,
 }: Props) {
   return (
@@ -96,44 +87,16 @@ export function ControlPanel({
           </select>
         </label>
         <label className="text-xs text-neutral-700">
-          投機モード:
-          <select
-            className="ml-2 rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
-            value={speculationMode}
-            onChange={(e) =>
-              onSpeculationModeChange(e.target.value as SpeculationMode)
-            }
+          投機長 (specWindow):
+          <input
+            className="ml-2 w-20 rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
+            type="number"
+            min={1}
+            value={specWindow}
+            onChange={(e) => onSpecWindowChange(Number(e.target.value))}
             disabled={isLoading}
-          >
-            <option value="discard">復帰なし</option>
-            <option value="stack-guard">スタック検証</option>
-          </select>
+          />
         </label>
-        <label className="text-xs text-neutral-700">
-          グラフ/長さ管理:
-          <select
-            className="ml-2 rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
-            value={specMode}
-            onChange={(e) => onSpecModeChange(e.target.value as SpecRunMode)}
-            disabled={isLoading}
-          >
-            <option value="legacy-meta">従来(meta)</option>
-            <option value="light">軽量(light)</option>
-          </select>
-        </label>
-        {specMode === "light" && (
-          <label className="text-xs text-neutral-700">
-            投機長 (light):
-            <input
-              className="ml-2 w-20 rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
-              type="number"
-              min={1}
-              value={specWindow}
-              onChange={(e) => onSpecWindowChange(Number(e.target.value))}
-              disabled={isLoading}
-            />
-          </label>
-        )}
 
         <div className="ml-auto flex items-center gap-1">
           <button

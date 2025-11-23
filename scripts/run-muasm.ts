@@ -8,20 +8,13 @@ import type {
   TraceMode,
   TraceStep,
   AnalysisError,
-  SpeculationMode,
-  SpecRunMode,
 } from "../lib/analysis-schema";
 
 const DEFAULT_TRACE_MODE: TraceMode = "bfs";
 const DEFAULT_TARGET = "muasm_case";
-const DEFAULT_SPEC_MODE: SpeculationMode = "discard";
-const DEFAULT_SPEC_RUN_MODE: SpecRunMode = "light";
 
 type CliOptions = {
   traceMode: TraceMode;
-  speculationMode: SpeculationMode;
-  specMode: SpecRunMode;
-  windowSize?: number;
   specWindow?: number;
 };
 
@@ -64,11 +57,8 @@ async function main() {
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-  let specModeExplicit = false;
   const options: CliOptions = {
     traceMode: DEFAULT_TRACE_MODE,
-    speculationMode: DEFAULT_SPEC_MODE,
-    specMode: DEFAULT_SPEC_RUN_MODE,
   };
   const targets: string[] = [];
 
@@ -101,38 +91,6 @@ function parseArgs(argv: string[]): ParsedArgs {
           `--trace-mode は 'bfs' | 'single-path' | 'dfs'(エイリアス) を指定してください (got: ${value ?? ""})`,
         );
       }
-      case "--speculation-mode": {
-        const value = maybeValue ?? argv[++i];
-        if (value === "discard" || value === "stack-guard") {
-          options.speculationMode = value;
-          break;
-        }
-        throw new Error(
-          `--speculation-mode は 'discard' | 'stack-guard' を指定してください (got: ${value ?? ""})`,
-        );
-      }
-      case "--spec-mode": {
-        const value = maybeValue ?? argv[++i];
-        if (value === "legacy-meta" || value === "light") {
-          options.specMode = value;
-          specModeExplicit = true;
-          break;
-        }
-        throw new Error(
-          `--spec-mode は 'legacy-meta' | 'light' のみを受け付けます。rollback 挙動は --speculation-mode で指定してください (got: ${value ?? ""})`,
-        );
-      }
-      case "--spec-graph-mode": {
-        const value = maybeValue ?? argv[++i];
-        if (value === "legacy-meta" || value === "light") {
-          options.specMode = value;
-          specModeExplicit = true;
-          break;
-        }
-        throw new Error(
-          `--spec-graph-mode は 'legacy-meta' | 'light' を指定してください (got: ${value ?? ""})`,
-        );
-      }
       case "--spec-window": {
         const value = maybeValue ?? argv[++i];
         const parsed = Number.parseInt(value ?? "", 10);
@@ -140,18 +98,6 @@ function parseArgs(argv: string[]): ParsedArgs {
           throw new Error("--spec-window は正の整数で指定してください");
         }
         options.specWindow = parsed;
-        break;
-      }
-      case "--window-size": {
-        const value = maybeValue ?? argv[++i];
-        const parsed = Number.parseInt(value ?? "", 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-          throw new Error("--window-size は正の整数で指定してください");
-        }
-        options.windowSize = parsed;
-        if (!specModeExplicit) {
-          options.specMode = "legacy-meta";
-        }
         break;
       }
       case "--help": {
@@ -173,13 +119,7 @@ Usage: bun run scripts/run-muasm.ts [options] [file|dir ...]
 
 Options:
   --trace-mode <bfs|single-path|dfs>  解析の探索戦略 (default: bfs)。dfs は single-path のエイリアス。
-  --speculation-mode <discard|stack-guard>
-                                   rollback 挙動を指定 (default: discard)
-  --spec-mode <legacy-meta|light>   グラフ/投機長管理モードを指定 (default: light)
-  --spec-graph-mode <legacy-meta|light>
-                                   --spec-mode のエイリアス。グラフ/長さ管理モードだけを切り替えたい場合に使用。
   --spec-window <n>                light モード時の投機長 (default: 20)
-  --window-size <n>                legacy(meta) ビルダーの投機ウィンドウの大きさ (default: VCFG builder デフォルト)
   --help                           このヘルプを表示
 
 引数を省略すると muasm_case/ 以下の全 .muasm を実行します。`);
@@ -237,9 +177,6 @@ async function runSingleCase(
   try {
     const result = await analyzeFn(source, {
       traceMode: options.traceMode,
-      speculationMode: options.speculationMode,
-      windowSize: options.windowSize,
-      specMode: options.specMode,
       specWindow: options.specWindow,
     });
     printAnalysisResult(
@@ -247,6 +184,7 @@ async function runSingleCase(
       result.result,
       result.traceMode,
       result.error,
+      result.warnings,
     );
     // エラーが含まれている場合は失敗扱いにする
     if (result.error) {
@@ -264,6 +202,7 @@ function printAnalysisResult(
   outcome: string,
   traceMode: TraceMode,
   error?: AnalysisError,
+  warnings?: AnalysisResult["warnings"],
 ) {
   console.log(`result     : ${outcome}`);
   console.log(`trace mode : ${traceMode}`);
@@ -280,6 +219,9 @@ function printAnalysisResult(
   if (error) {
     console.log(`error.type : ${error.type}`);
     console.log(`error.msg  : ${error.message}`);
+  }
+  if (warnings && warnings.length > 0) {
+    console.log(`warnings   : ${warnings.map((w) => w.type).join(",")}`);
   }
 }
 

@@ -61,7 +61,6 @@ const activeColors: Record<
 const edgeColors = {
   ns: "#94a3b8",
   spec: "#f59e0b",
-  rollback: "#ef4444",
 } as const;
 
 type VisualizationNode = Node<{
@@ -120,7 +119,7 @@ function toEdges(graph: StaticGraph): VisualizationEdge[] {
       id: createEdgeId(edge, idx),
       source: edge.source,
       target: edge.target,
-      label: edge.type === "rollback" ? "rollback" : (edge.label ?? edge.type),
+      label: edge.label ?? edge.type,
       style: { stroke: color, strokeWidth: 2 },
       labelStyle: { fill: color, fontSize: 11, fontWeight: 600 },
       animated: edge.type === "spec",

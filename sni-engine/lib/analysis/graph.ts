@@ -40,20 +40,8 @@ export function validateGraph(input: StaticGraph): StaticGraph {
         `edge target missing node: ${e.target} (from ${e.source} '${srcInfo}')`,
       );
     }
-    if (e.type !== "ns" && e.type !== "spec" && e.type !== "rollback") {
+    if (e.type !== "ns" && e.type !== "spec") {
       throw new Error(`edge.type invalid on ${e.source}->${e.target}`);
-    }
-    if (e.type === "rollback") {
-      if (srcNode.type !== "spec") {
-        throw new Error(
-          `rollback edge must originate from spec node: ${e.source}->${e.target}`,
-        );
-      }
-      if (tgtNode.type !== "ns") {
-        throw new Error(
-          `rollback edge must target ns node: ${e.source}->${e.target}`,
-        );
-      }
     }
     if (e.type === "spec") _hasSpecNode = true;
   }

@@ -1,8 +1,9 @@
 # SNI-engine 現行仕様サマリ (実装ベース)
 
 - 作成日: 2025-11-17  
+- 最終更新: 2025-11-23（実装と整合）  
 - 対象: SNI 解析コア利用者・実装担当  
-- 根拠: `sni-engine/src/*.ts`（実装コード）、旧 `project.md` / `requirements-and-plan.md`
+- 根拠: `sni-engine/lib/*.ts`（実装コード）、旧 `project.md` / `requirements-and-plan.md`
 
 本ドキュメントは、理論論文を読んでいない実装担当者でも読めるように、  
 **現時点の実装が実際に行っていること** をコードベースから逆算してまとめた仕様書である。  
@@ -25,7 +26,7 @@
 
 - 入力: `StaticGraph`
   - ノード: `{ id, pc: number, type: "ns" | "spec", instruction?: string, label?: string }`
-  - エッジ: `{ source, target, type: "ns" | "spec" | "rollback" }`
+  - エッジ: `{ source, target, type: "ns" | "spec" }`（Pruning-VCFG）
 - 出力: `AnalysisResult`
   - `graph`: そのまま返却
   - `trace.steps`: Worklist による解析順のスナップショット列
@@ -38,7 +39,6 @@ VCFG 上で、実行モード `Mode` は `"NS"` / `"Speculative"` の 2 種類�
 - エッジ遷移時のモード:
   - `ns` エッジ: モード維持
   - `spec` エッジ: 強制的に `Speculative`
-  - `rollback` エッジ: 投機スタックを pop し、空なら `NS`、残れば `Speculative` 継続
 
 ## 2. 抽象状態と格子
 
@@ -105,17 +105,12 @@ Bot < EqLow < EqHigh < Diverge < Leak < Top
   - `policy.mem[k] === "Low"` → `{EqLow, EqLow}`、`"High"` → `{EqHigh, EqHigh}`。
   - 未指定ロケーションは `{EqHigh, EqHigh}` を既定値とみなす。
 
-## 2.1 投機モードの切替
+## 2.1 投機モード
 
-- `speculationMode: "stack-guard"`（デフォルト）  
-  - rollback エッジを辿りつつ、`spec-end` への遷移時に「スタックトップと specContext.id が一致する場合のみ許可」。不一致はスキップする。  
-  - スタック内容は UI で表示され、MaxSpeculationDepth 警告も発行する。
-- `speculationMode: "discard"`  
-  - rollback エッジを無視し、spec-end で探索終了。投機パスは NS に影響を戻さない。
-
-### 現状の課題（スタックキーの簡略化未着手）
-
-- 投機スタックのキーは全コンテキストの連結文字列（例: `Speculative|ctxA::ctxB`）をそのまま使用しており、k-limiting 等の縮約は未実装。深いネスト下では状態数が増えやすい。今後、stack-guard 専用の簡略キー（トップのみ・深さのみ等）への切替を検討する必要がある。
+- 実装は Pruning-VCFG を前提とし、エッジ種別は `ns` / `spec` のみ。rollback や spec-end は生成しない。
+- 投機長は単一カウンタ `specWindow`（デフォルト 20）で管理し、0 未満になる spec エッジは探索しない。NS エッジではカウンタを減算しない。
+- `specMode` は `"light"` 固定。分岐ごとに `spec-begin` を 1 つ挿入するだけで、投機長の展開は行わない。
+- デバッグ用に `specContext.id` を push/pop したログスタックをトレースに含めるが、実行セマンティクスには影響しない。
 
 ## 3. 転送関数 (命令セマンティクス)
 
@@ -227,7 +222,7 @@ updateCtrlObsSpec(state, obsId, observed) {
 
 ### 4.1 Violation 判定
 
-- `stateHasViolation(state)` は `state.obsMem` / `state.obsCtrl` のいずれかに `Leak` もしくは `Top` が含まれるかだけを見る。
+- `stateHasViolation(state)` は `state.obsMem` / `state.obsCtrl` のいずれかに `Leak` が含まれるかだけを見る（`Top` は警告・不確定扱いに留める）。
 - 解析全体としては、トレース中に 1 度でも `isViolation=true` なステップがあれば `result = "SNI_Violation"`。
 
 ## 5. 理論仕様との主な差分

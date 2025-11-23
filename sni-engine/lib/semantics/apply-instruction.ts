@@ -8,6 +8,7 @@ import {
   joinSecurity,
   isHighLike,
   securityToLattice,
+  makeRel,
 } from "../core/state";
 import { getMem, getReg, setMem, setReg } from "../core/state-ops";
 import {
@@ -65,13 +66,14 @@ export function applyInstruction(
 
   const setValue = (kind: "reg" | "mem", name: string, value: RelValue) => {
     if (executionMode === "NS") {
-      kind === "reg" ? setReg(next, name, value) : setMem(next, name, value);
+      const v = makeRel(value.ns, value.sp);
+      kind === "reg" ? setReg(next, name, v) : setMem(next, name, v);
     } else {
       const prev = kind === "reg" ? getReg(next, name) : getMem(next, name);
-      const updated: RelValue = {
-        ns: prev.ns,
-        sp: joinSecurity(prev.sp, value.sp),
-      };
+      const updated: RelValue = makeRel(
+        prev.ns,
+        joinSecurity(prev.sp, value.sp),
+      );
       kind === "reg"
         ? setReg(next, name, updated)
         : setMem(next, name, updated);
@@ -98,10 +100,10 @@ export function applyInstruction(
     case "load": {
       const lAddr = evalExpr(state, ast.addr);
       const lVal = getMemByExpr(state, ast.addr);
-      const v: RelValue = {
-        ns: joinSecurity(lVal.ns, lAddr.ns),
-        sp: joinSecurity(lVal.sp, lAddr.sp),
-      };
+      const v: RelValue = makeRel(
+        joinSecurity(lVal.ns, lAddr.ns),
+        joinSecurity(lVal.sp, lAddr.sp),
+      );
       const observedPoint = executionMode === "NS" ? lAddr.ns : lAddr.sp;
       observeMem(isHighLike(observedPoint) ? "EqHigh" : "EqLow");
       setValue("reg", ast.dest, v);
@@ -110,10 +112,10 @@ export function applyInstruction(
     case "store": {
       const lAddr = evalExpr(state, ast.addr);
       const lVal = getReg(state, ast.src);
-      const v: RelValue = {
-        ns: joinSecurity(lVal.ns, lAddr.ns),
-        sp: joinSecurity(lVal.sp, lAddr.sp),
-      };
+      const v: RelValue = makeRel(
+        joinSecurity(lVal.ns, lAddr.ns),
+        joinSecurity(lVal.sp, lAddr.sp),
+      );
       const observedPoint = executionMode === "NS" ? lAddr.ns : lAddr.sp;
       observeMem(isHighLike(observedPoint) ? "EqHigh" : "EqLow");
       setValue("mem", defaultMemLabel(ast.addr), v);

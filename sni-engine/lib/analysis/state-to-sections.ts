@@ -1,7 +1,6 @@
 import type { StateSection } from "@/lib/analysis-schema";
-import { join, toDisplay } from "../core/lattice";
+import { toDisplay } from "../core/lattice";
 import type { AbsState } from "../core/state";
-import { securityToLattice } from "../core/state";
 
 type SpecStack = readonly string[] | undefined;
 
@@ -29,16 +28,14 @@ export function stateToSections(
   const stackData: Record<string, ReturnType<typeof toDisplay>> = {};
 
   for (const [k, v] of state.regs) {
-    const joined = join(securityToLattice(v.ns), securityToLattice(v.sp));
     regs[k] = {
-      ...toDisplay(joined),
+      ...toDisplay(v.rel),
       detail: { ns: v.ns, sp: v.sp },
     };
   }
   for (const [k, v] of state.mem) {
-    const joined = join(securityToLattice(v.ns), securityToLattice(v.sp));
     mem[k] = {
-      ...toDisplay(joined),
+      ...toDisplay(v.rel),
       detail: { ns: v.ns, sp: v.sp },
     };
   }
@@ -61,10 +58,10 @@ export function stateToSections(
   }
 
   const hasMemViolation = Array.from(state.obsMem.values()).some(
-    (v) => v === "Leak" || v === "Top",
+    (v) => v === "Leak",
   );
   const hasCtrlViolation = Array.from(state.obsCtrl.values()).some(
-    (v) => v === "Leak" || v === "Top",
+    (v) => v === "Leak",
   );
 
   const sections: StateSection[] = [

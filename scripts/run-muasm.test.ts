@@ -14,11 +14,9 @@ describe("run-muasm CLI options", () => {
 
   afterEach(() => {});
 
-  it("defaults to bfs / discard / light", () => {
+  it("defaults to bfs", () => {
     const parsed = parseArgs([]);
     expect(parsed.options.traceMode).toBe("bfs");
-    expect(parsed.options.speculationMode).toBe("discard");
-    expect(parsed.options.specMode).toBe("light");
   });
 
   it("accepts dfs alias (single-path)", () => {
@@ -26,17 +24,13 @@ describe("run-muasm CLI options", () => {
     expect(parsed.options.traceMode).toBe("single-path");
   });
 
-  it("accepts stack-guard via speculation-mode", () => {
-    const parsed = parseArgs(["--speculation-mode", "stack-guard"]);
-    expect(parsed.options.speculationMode).toBe("stack-guard");
+  it("rejects non-positive spec-window", () => {
+    expect(() => parseArgs(["--spec-window", "0"])).toThrow(
+      /spec-window は正の整数/,
+    );
   });
 
-  it("accepts light spec graph mode", () => {
-    const parsed = parseArgs(["--spec-graph-mode", "light"]);
-    expect(parsed.options.specMode).toBe("light");
-  });
-
-  it("passes modes to analyze()", async () => {
+  it("passes options to analyze()", async () => {
     // create temp muasm file
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "muasm-"));
     const file = path.join(dir, "case.muasm");
@@ -61,8 +55,6 @@ describe("run-muasm CLI options", () => {
       file,
       {
         traceMode: "single-path",
-        speculationMode: "discard",
-        specMode: "light",
         specWindow: 5,
       },
       analyzeStub,
@@ -73,9 +65,6 @@ describe("run-muasm CLI options", () => {
       source: "skip\n",
       opts: {
         traceMode: "single-path",
-        speculationMode: "discard",
-        windowSize: undefined,
-        specMode: "light",
         specWindow: 5,
       },
     });

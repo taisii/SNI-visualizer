@@ -15,15 +15,16 @@ describe("parseGraph structural checks", () => {
     expect(() => validateGraph(graph)).not.toThrow();
   });
 
-  it("requires rollback to go spec -> ns", () => {
+  it("rejects edge types other than ns/spec", () => {
     const graph: StaticGraph = {
       nodes: [
         { id: "s1", pc: 1, type: "spec", label: "1: skip" },
         { id: "s2", pc: 2, type: "spec", label: "2: skip" },
       ],
+      // @ts-expect-error 故意に無効値を渡す
       edges: [{ source: "s1", target: "s2", type: "rollback" }],
     };
-    expect(() => validateGraph(graph)).toThrow(/target ns node/);
+    expect(() => validateGraph(graph)).toThrow(/edge.type invalid/);
   });
 });
 

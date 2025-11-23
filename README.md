@@ -4,17 +4,15 @@ MuASM プログラムに対する投機的非干渉 (SNI) を静的解析し、�
 
 ## できること / メリット
 - MuASM ソースを入力して SNI 解析を実行し、結果をステップ再生で確認できる。
-- 通常/投機/ロールバックの経路を色分けした VCFG を自動描画。
+- 通常/投機の経路を色分けした軽量 VCFG を自動描画（spec-begin メタノードのみ付与、rollback/spec-end は生成しない）。
 - 抽象状態 (レジスタ・メモリ・観測履歴) を High/Low/Leak で可視化。
-- 解析モードを切替可能:
-  - **light** (デフォルト): グラフを最小化し、投機長 `specWindow` をエンジン側で管理。
-  - **legacy-meta**: 従来の前展開グラフ（後方互換用）。
+- 解析パラメータは `traceMode (bfs/single-path)` と投機長 `specWindow` のみ（投機モードは固定）。
 - CLI でケース一括実行し、CI やベンチに組み込みやすい。
 
 ## システム概要
 - **Web アプリ**: Next.js 16 + React 19。結果 JSON を受け取り VCFG と抽象状態を表示。左右 2 ペイン（左: 操作/VCFG、右: エディタ/状態）。
-- **VCFG Builder**: MuASM をパースして `StaticGraph` を生成。`mode: "legacy-meta" | "light"` をサポート（ファサードのデフォルトは light）。`speculationMode: "discard" | "stack-guard"`（デフォルト discard）。
-- **SNI エンジン**: 抽象解釈で Leak 検出。`traceMode (bfs/single-path)`, `specWindow` (light 専用, default 20), `maxSpeculationDepth`, `speculationMode` (default discard) 等を受理。
+- **VCFG Builder**: MuASM をパースして `StaticGraph` を生成。現在は `mode: "light"` のみ（spec-begin メタノードだけを付与）。
+- **SNI エンジン**: 抽象解釈で Leak 検出。`traceMode (bfs/single-path)` と `specWindow` (default 20) を受理し、Pruning-VCFG 上で投機長カウンタが尽きたら探索を打ち切る。
 - **共通スキーマ**: `lib/analysis-schema/index.ts` が `AnalysisResult` / `StaticGraph` の単一正本。
 
 ## セットアップと実行
@@ -30,14 +28,14 @@ bun start
 
 ### CLI で MuASM ケースを走らせる
 ```bash
-# muasm_case/ 配下を一括解析 (デフォルト bfs, light, discard, specWindow=20)
+# muasm_case/ 配下を一括解析 (デフォルト traceMode=bfs, specWindow=20)
 bun run muasm:run
 
-# light グラフ + specWindow=8 で実行（rollback は discard のまま）
-bun run muasm:run --spec-graph-mode light --spec-window 8
+# 投機長を変更して実行
+bun run muasm:run --spec-window 8
 
-# rollback 検証を有効にする
-bun run muasm:run --speculation-mode stack-guard
+# トレースモードを DFS(single-path) で実行
+bun run muasm:run --trace-mode single-path
 ```
 オプションは `bun run scripts/run-muasm.ts --help` を参照。
 
