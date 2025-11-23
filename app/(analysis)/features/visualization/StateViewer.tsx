@@ -156,7 +156,7 @@ export function StateViewer({ state, graph }: Props) {
   if (!state) {
     return (
       <div className="flex h-full items-center justify-center rounded border border-dashed border-neutral-200 bg-white text-sm text-neutral-500">
-        State will appear here
+        状態はここに表示されます
       </div>
     );
   }
