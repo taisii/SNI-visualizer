@@ -6,6 +6,8 @@ import type {
   StaticGraph,
   TraceStep,
   TraceMode,
+  SpecRunMode as SchemaSpecRunMode,
+  SpeculationMode as SchemaSpeculationMode,
 } from "@/lib/analysis-schema";
 import { ANALYSIS_SCHEMA_VERSION } from "@/lib/analysis-schema";
 import {
@@ -37,27 +39,49 @@ export type AnalyzeOptions = {
   traceMode?: TraceMode;
   maxSpeculationDepth?: number;
   speculationMode?: SpeculationMode;
+  specWindow?: number;
+  specMode?: SpecRunMode;
 };
 
-export type SpeculationMode = "discard" | "stack-guard";
+export type SpeculationMode = SchemaSpeculationMode;
+export type SpecRunMode = SchemaSpecRunMode;
 
 const DEFAULT_CAP = 10_000;
 const DEFAULT_MAX_STEPS = 10_000;
 const DEFAULT_TRACE_MODE: TraceMode = "bfs";
 const DEFAULT_MAX_SPECULATION_DEPTH = 20;
-const DEFAULT_SPECULATION_MODE: SpeculationMode = "stack-guard";
+const DEFAULT_SPECULATION_MODE: SpeculationMode = "discard";
+const DEFAULT_SPEC_WINDOW = 20;
+const DEFAULT_SPEC_MODE: SpecRunMode = "light";
 
 type ContextStack = readonly string[];
+type SpecWindowStack = readonly number[];
 
 const makeModeKey = (
   mode: ExecutionMode,
   stack: ContextStack,
+  windowStack: SpecWindowStack,
   stackKey: (stack: ContextStack) => string,
 ): string =>
-  mode === "NS" ? "NS" : `Speculative|${stackKey(stack)}`;
+  mode === "NS"
+    ? "NS"
+    : `Speculative|${stackKey(stack)}|w:${makeWindowKey(windowStack)}`;
 
 const makeStackKey = (stack: ContextStack) =>
   stack.length === 0 ? "root" : stack.join("::");
+
+const makeWindowKey = (stack: SpecWindowStack) =>
+  stack.length === 0 ? "root" : stack.join("::");
+
+const decrementTop = (
+  stack: SpecWindowStack,
+  delta = 1,
+): SpecWindowStack => {
+  if (stack.length === 0) return stack;
+  const next = [...stack];
+  next[next.length - 1] = next[next.length - 1] - delta;
+  return next;
+};
 
 const pushContext = (stack: ContextStack, ctxId?: string): ContextStack => {
   if (!ctxId) return stack;
@@ -126,6 +150,10 @@ export async function analyzeVCFG(
 ): Promise<AnalysisResult> {
   const traceMode = opts.traceMode ?? DEFAULT_TRACE_MODE;
   const warnings: AnalysisWarning[] = [];
+  const speculationMode = opts.speculationMode ?? DEFAULT_SPECULATION_MODE;
+  const specMode = opts.specMode ?? DEFAULT_SPEC_MODE;
+  const specWindow = opts.specWindow ?? DEFAULT_SPEC_WINDOW;
+  const specWindowActive = specMode === "light";
   let graph: StaticGraph;
   try {
     graph = validateGraph(rawGraph);
@@ -141,6 +169,9 @@ export async function analyzeVCFG(
         message: err instanceof Error ? err.message : String(err),
         detail: err,
       },
+      specMode,
+      specWindow: specWindowActive ? specWindow : undefined,
+      speculationMode,
       warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
@@ -148,7 +179,6 @@ export async function analyzeVCFG(
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
   const maxSpeculationDepth =
     opts.maxSpeculationDepth ?? DEFAULT_MAX_SPECULATION_DEPTH;
-  const speculationMode = opts.speculationMode ?? DEFAULT_SPECULATION_MODE;
   const discardSpec = speculationMode === "discard";
   const stackGuardEnabled = speculationMode === "stack-guard";
   const stackKeyFn = makeStackKey;
@@ -158,6 +188,24 @@ export async function analyzeVCFG(
   const specContextInfo = buildSpecContextInfo(graph);
   const entryNode = getEntryNode(graph, opts.entryNodeId, nodeMap);
   const adj = getAdj(graph);
+
+  if (specWindowActive && specWindow <= 0) {
+    return {
+      schemaVersion: ANALYSIS_SCHEMA_VERSION,
+      graph,
+      trace: { steps: [] },
+      traceMode,
+      result: "SNI_Violation",
+      error: {
+        type: "AnalysisError",
+        message: "specWindow must be greater than 0",
+        detail: { specWindow },
+      },
+      warnings: warnings.length > 0 ? warnings : undefined,
+      specMode,
+      specWindow,
+    };
+  }
 
   const states = new Map<string, Map<string, AbsState>>();
   const ensureState = (nodeId: string, modeKey: string): AbsState => {
@@ -171,7 +219,14 @@ export async function analyzeVCFG(
   const entryMode: ExecutionMode =
     entryNode.type === "spec" ? "Speculative" : "NS";
   const entryStack = deriveInitialStack(entryNode, entryMode);
-  const entryModeKey = makeModeKey(entryMode, entryStack, stackKeyFn);
+  const entryWindowStack: SpecWindowStack =
+    specWindowActive && entryMode === "Speculative" ? [specWindow] : [];
+  const entryModeKey = makeModeKey(
+    entryMode,
+    entryStack,
+    entryWindowStack,
+    stackKeyFn,
+  );
   ensureState(entryNode.id, entryModeKey);
   const seededInit = initState(opts.policy, opts.entryRegs);
   seedRegs(seededInit, usedRegs);
@@ -181,12 +236,14 @@ export async function analyzeVCFG(
     nodeId: string;
     executionMode: ExecutionMode;
     stack: ContextStack;
+    specWindowStack: SpecWindowStack;
   };
   const worklist: WorkItem[] = [
     {
       nodeId: entryNode.id,
       executionMode: entryMode,
       stack: entryStack,
+      specWindowStack: entryWindowStack,
     },
   ];
   const takeNext = (): WorkItem | undefined =>
@@ -203,6 +260,10 @@ export async function analyzeVCFG(
     nodeId: "", // entry はどのノードにもフォーカスさせない
     description: "(entry)",
     executionMode: entryMode,
+    specWindowRemaining:
+      specWindowActive && entryMode === "Speculative"
+        ? specWindow
+        : undefined,
     state: stateToSections(init, {
       specStack: entryStack,
       specContextInfo,
@@ -213,12 +274,27 @@ export async function analyzeVCFG(
   while (worklist.length > 0) {
     const shifted = takeNext();
     if (!shifted) break;
-    const { nodeId, executionMode, stack } = shifted;
+    const { nodeId, executionMode, stack, specWindowStack } = shifted;
     const node = nodeMap.get(nodeId);
     if (!node) continue;
-    const modeKey = makeModeKey(executionMode, stack, stackKeyFn);
+    const modeKey = makeModeKey(
+      executionMode,
+      stack,
+      specWindowStack,
+      stackKeyFn,
+    );
     const inState = ensureState(nodeId, modeKey);
     seedRegs(inState, usedRegs);
+
+    const currentWindowRemaining =
+      specWindowActive && executionMode === "Speculative"
+        ? specWindowStack.at(-1)
+        : undefined;
+    const budgetExhausted =
+      specWindowActive &&
+      executionMode === "Speculative" &&
+      currentWindowRemaining !== undefined &&
+      currentWindowRemaining <= 0;
 
     let outState: AbsState;
     try {
@@ -235,6 +311,9 @@ export async function analyzeVCFG(
           message: err instanceof Error ? err.message : String(err),
           detail: err,
         },
+        specMode,
+        specWindow: specWindowActive ? specWindow : undefined,
+        speculationMode,
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
@@ -253,6 +332,9 @@ export async function analyzeVCFG(
           message: "maxSteps exceeded",
           detail: { maxSteps },
         },
+        specMode,
+        specWindow: specWindowActive ? specWindow : undefined,
+        speculationMode,
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
@@ -262,6 +344,7 @@ export async function analyzeVCFG(
       nodeId,
       description: node.label ?? "",
       executionMode,
+      specWindowRemaining: currentWindowRemaining,
       state: stateToSections(outState, {
         specStack: stack,
         specContextInfo,
@@ -276,6 +359,9 @@ export async function analyzeVCFG(
         trace: { steps: stepLogs } as ExecutionTrace,
         traceMode,
         result: "SNI_Violation",
+        specMode,
+        specWindow: specWindowActive ? specWindow : undefined,
+        speculationMode,
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
@@ -314,7 +400,13 @@ export async function analyzeVCFG(
         }
       }
 
+      if (budgetExhausted && e.type !== "rollback") {
+        // specWindow が尽きたら rollback 以外の遷移は遮断する
+        continue;
+      }
+
       let nextStack: ContextStack = stack;
+      let nextWindowStack: SpecWindowStack = specWindowStack;
       let targetExecutionMode: ExecutionMode = executionMode;
       if (e.type === "spec") {
         targetExecutionMode = "Speculative";
@@ -346,15 +438,43 @@ export async function analyzeVCFG(
         }
 
         nextStack = pushContext(stack, contextIdToPush);
+        if (specWindowActive) {
+          // spec-begin へ入るステップでも外側の残量を先に 1 減算し、その上で新しい窓を push する
+          if (contextIdToPush) {
+            const decremented = decrementTop(specWindowStack);
+            nextWindowStack = [...decremented, specWindow];
+          } else if (executionMode === "Speculative") {
+            nextWindowStack = decrementTop(specWindowStack);
+          }
+        }
       } else if (e.type === "rollback") {
         const popped = popContext(stack, node.specContext?.id);
         nextStack = popped;
         targetExecutionMode = popped.length > 0 ? "Speculative" : "NS";
+        if (specWindowActive) {
+          nextWindowStack = specWindowStack.slice(0, popped.length);
+        }
+      } else {
+        if (specWindowActive && executionMode === "Speculative") {
+          nextWindowStack = decrementTop(specWindowStack);
+        } else {
+          nextWindowStack = specWindowStack;
+        }
+      }
+
+      if (
+        specWindowActive &&
+        targetExecutionMode === "Speculative" &&
+        nextWindowStack.length > 0 &&
+        nextWindowStack[nextWindowStack.length - 1] < 0
+      ) {
+        continue;
       }
 
       const targetModeKey = makeModeKey(
         targetExecutionMode,
         nextStack,
+        nextWindowStack,
         stackKeyFn,
       );
       const existingStates = states.get(tgtId);
@@ -378,6 +498,7 @@ export async function analyzeVCFG(
           nodeId: tgtId,
           executionMode: targetExecutionMode,
           stack: nextStack,
+          specWindowStack: nextWindowStack,
         });
       }
     }
@@ -395,6 +516,9 @@ export async function analyzeVCFG(
           message: "iterationCap exceeded",
           detail: { iterationCap },
         },
+        specMode,
+        specWindow: specWindowActive ? specWindow : undefined,
+        speculationMode,
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
@@ -407,6 +531,9 @@ export async function analyzeVCFG(
     trace: { steps: stepLogs } as ExecutionTrace,
     traceMode,
     result: finalViolation ? "SNI_Violation" : "Secure",
+    specMode,
+    specWindow: specWindowActive ? specWindow : undefined,
+    speculationMode,
     warnings: warnings.length > 0 ? warnings : undefined,
   };
   return result;

@@ -3,6 +3,8 @@ import type { Instruction as MuasmInstruction } from "@/muasm-ast";
 export const ANALYSIS_SCHEMA_VERSION = "1.2.0" as const;
 
 export type TraceMode = "bfs" | "single-path";
+export type SpecRunMode = "legacy-meta" | "light";
+export type SpeculationMode = "discard" | "stack-guard";
 
 export type AnalysisResult = {
   /** 互換性管理のためのスキーマバージョン */
@@ -19,6 +21,12 @@ export type AnalysisResult = {
   error?: AnalysisError;
   /** エラーではないが UI で伝えたい注意事項 */
   warnings?: AnalysisWarning[];
+  /** 現在のグラフ/投機長管理のモード */
+  specMode?: SpecRunMode;
+  /** 投機ウィンドウ長 (light モード時のみ有効) */
+  specWindow?: number;
+  /** 投機コンテキスト整合のモード (rollback 抑制など) */
+  speculationMode?: SpeculationMode;
 };
 
 export type AnalysisError = {
@@ -81,6 +89,8 @@ export type TraceStep = {
   nodeId: string;
   description: string;
   executionMode: "NS" | "Speculative";
+  /** 投機モード時に残っている specWindow (light 専用) */
+  specWindowRemaining?: number;
   state: AbstractState;
   isViolation: boolean;
 };

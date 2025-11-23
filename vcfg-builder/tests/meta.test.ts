@@ -9,7 +9,7 @@ beqz cond, L1
 skip
 L1: skip
 `,
-      { windowSize: 2 },
+      { windowSize: 2, speculationMode: "stack-guard" },
     );
 
     const nsNodes = graph.nodes.filter((n) => n.type === "ns");
@@ -36,7 +36,7 @@ beqz x, L
 skip
 L: skip
 `,
-      { windowSize: 2 },
+      { windowSize: 2, speculationMode: "stack-guard" },
     );
 
     const specBegin = graph.nodes.find((n) => n.id.includes(":begin"));
@@ -114,7 +114,7 @@ beqz x, L
 skip
 L: skip
 `,
-      { windowSize: 1 },
+      { windowSize: 1, speculationMode: "stack-guard" },
     );
 
     const rollbackTargets = new Set(

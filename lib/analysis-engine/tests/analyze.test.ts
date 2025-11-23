@@ -36,12 +36,14 @@ describe("analysis-engine analyze", () => {
     await analyze("source code");
 
     expect(buildVCFGMock).toHaveBeenCalledWith("source code", {
+      mode: "light",
       windowSize: undefined,
-      speculationMode: "stack-guard",
+      speculationMode: "discard",
     });
     expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
       traceMode: "single-path",
-      speculationMode: "stack-guard",
+      speculationMode: "discard",
+      specMode: "light",
     });
   });
 
@@ -64,6 +66,7 @@ describe("analysis-engine analyze", () => {
     });
 
     expect(buildVCFGMock).toHaveBeenCalledWith("source code", {
+      mode: "meta",
       windowSize: 10,
       speculationMode: "discard",
     });
@@ -71,6 +74,37 @@ describe("analysis-engine analyze", () => {
       traceMode: "bfs",
       maxSteps: 3,
       speculationMode: "discard",
+      specMode: "legacy-meta",
+    });
+  });
+
+  it("light モードでは builder に mode を渡し、specWindow をエンジンへ渡す", async () => {
+    const graph: StaticGraph = { nodes: [], edges: [] };
+    buildVCFGMock.mockReturnValue(graph);
+    analyzeVCFGMock.mockResolvedValue({
+      schemaVersion: "1.2.0",
+      graph,
+      trace: { steps: [] },
+      traceMode: "single-path",
+      result: "Secure",
+    });
+
+    await analyze("src", {
+      specMode: "light",
+      specWindow: 5,
+      speculationMode: "stack-guard",
+    });
+
+    expect(buildVCFGMock).toHaveBeenCalledWith("src", {
+      mode: "light",
+      windowSize: undefined,
+      speculationMode: "stack-guard",
+    });
+    expect(analyzeVCFGMock).toHaveBeenCalledWith(graph, {
+      specMode: "light",
+      specWindow: 5,
+      traceMode: "single-path",
+      speculationMode: "stack-guard",
     });
   });
 

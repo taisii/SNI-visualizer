@@ -9,6 +9,8 @@ import {
 
 type RunnerOptions = AnalyzeOptions & {
   windowSize?: number;
+  /** @deprecated mode と specMode で制御するため非推奨 */
+  mode?: "meta" | "light";
 };
 
 function buildErrorResult(
@@ -16,6 +18,7 @@ function buildErrorResult(
   message: string,
   detail: unknown,
   traceMode: TraceMode,
+  extras?: Partial<AnalysisResult>,
 ): AnalysisResult {
   return {
     schemaVersion: ANALYSIS_SCHEMA_VERSION,
@@ -28,6 +31,7 @@ function buildErrorResult(
       message,
       detail,
     },
+    ...extras,
   };
 }
 
@@ -40,14 +44,31 @@ export async function analyze(
   options: RunnerOptions = {},
 ): Promise<AnalysisResult> {
   const traceMode = options.traceMode ?? "single-path";
-  const speculationMode = options.speculationMode ?? "stack-guard";
+  const speculationMode = options.speculationMode ?? "discard";
+  const selectedSpecMode =
+    options.specMode ??
+    (options.mode
+      ? options.mode === "light"
+        ? "light"
+        : "legacy-meta"
+      : options.windowSize !== undefined
+        ? "legacy-meta"
+        : "light");
+
+  const builderMode = selectedSpecMode === "light" ? "light" : "meta";
   try {
     const graph = buildVCFG(sourceCode, {
+      mode: builderMode,
       windowSize: options.windowSize,
       speculationMode,
     });
-    const { windowSize: _omitWin, ...engineOpts } = options;
-    return await analyzeVCFG(graph, { ...engineOpts, traceMode, speculationMode });
+    const { windowSize: _omitWin, mode: _omitMode, ...engineOpts } = options;
+    return await analyzeVCFG(graph, {
+      ...engineOpts,
+      traceMode,
+      speculationMode,
+      specMode: selectedSpecMode,
+    });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "解析で例外が発生しました";
@@ -56,6 +77,10 @@ export async function analyze(
         ? "ParseError"
         : "InternalError";
     // buildVCFG が投げる ParseError を UI 側に伝搬させるため error フィールドで返す
-    return buildErrorResult(type, message, err, traceMode);
+    return buildErrorResult(type, message, err, traceMode, {
+      specMode: selectedSpecMode,
+      specWindow: options.specWindow,
+      speculationMode,
+    });
   }
 }

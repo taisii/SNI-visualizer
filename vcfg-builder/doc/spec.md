@@ -7,8 +7,9 @@
 - **サポート命令**（8 種類）: `skip`、代入 `x <- e`、`load x, e`、`store x, e`、`beqz x, L`、`bnez x, L`、`jmp e`、`spbarr`、条件付き代入 `x <- e1 ? e2`。構文とトークナイズは `muasm-ast/lib/parser.ts`。
 - **ジャンプ解決**: `jmp` 先は整数リテラルまたはラベルでなければエラー。レジスタや式がラベルに解決できない場合は例外を投げます。参照: `muasm-ast/lib/parser.ts`、`vcfg-builder/lib/modes/*`。
 - **パラメータ**:  
-  - `windowSize`（投機ウィンドウ長）デフォルト 20。0 以下は例外。  
-- `speculationMode`: `"stack-guard"`（デフォルト）/ `"discard"`。discard のとき rollback エッジを生成しない。参照: `vcfg-builder/lib/options.ts`。
+  - `mode`: `"meta"`（ビルダー直呼び時の後方互換デフォルト）/ `"light"`。UI・CLI などファサードのデフォルトは `light`。meta は従来の前展開、light は spec-begin/end だけを付与する軽量モード（投機長は解析エンジン `specWindow` に委譲）。
+  - `windowSize`（投機ウィンドウ長）デフォルト 20。`mode="meta"` のときのみ使用し、0 以下は例外。  
+- `speculationMode`: `"discard"`（デフォルト）/ `"stack-guard"`。discard のとき rollback エッジを生成しない。参照: `vcfg-builder/lib/options.ts`。
 
 ## 2. 出力（StaticGraph）
 - **スキーマの正本**: `StaticGraph`/`AnalysisResult` の正式スキーマは `doc/project.md` §3 と `lib/analysis-schema/index.ts` をソース・オブ・トゥルースとする。本書は生成ポリシーと実装上の挙動のみを要約する。
@@ -23,15 +24,15 @@
 2. **通常パスのグラフ化**  
    - 全命令を通常ノードとして登録。`jmp` は解決先へ 1 本、`beqz` / `bnez` は条件をラベルに持つ 2 本、その他は次行へのフォールスルーを張ります。参照: `vcfg-builder/lib/modes/meta.ts`。
 
-3. **投機パスの展開（meta モード）**  
-   - NS ノードを共有しつつ、分岐ごとに `spec-begin` / `spec-end` のメタノード（`type:"spec"`）を追加して投機領域をマーキング。予算ゼロまたは `spbarr` で `rollback`。
-   - 分岐内部でも `beqz` や `jmp` を再帰的に辿り、予算をデクリメントしながら `spec` エッジを追加する。参照: `vcfg-builder/lib/modes/meta.ts`。
+3. **投機パスの展開**  
+   - meta モード: NS ノードを共有しつつ、分岐ごとに `spec-begin` / `spec-end` のメタノード（`type:"spec"`）を追加して投機領域をマーキング。予算ゼロまたは `spbarr` で `rollback`。分岐内部でも `beqz` や `jmp` を再帰的に辿り、予算をデクリメントしながら `spec` エッジを追加する。参照: `vcfg-builder/lib/modes/meta.ts`。
+   - light モード: 先読み展開せず、各分岐に spec-begin/end を 1 組だけ追加。spec-begin からは taken/untaken 双方へ `spec` エッジを張り、即時 rollback 可能な `spec-end`（+ rollback）を 1 本だけ生成する。投機長の管理は解析エンジンの `specWindow` に委譲。参照: `vcfg-builder/lib/modes/light.ts`。
 
 4. **ロールバックの安全側制御**  
    - ロールバック先 PC が存在しない場合（例: プログラム末尾を超える場合）はエッジを張らずに終了し、無効 ID への遷移を防ぎます。参照: `vcfg-builder/lib/modes/meta.ts`。
 
 ## 4. エラーと制約
-- `windowSize <= 0` で例外（予防的ガード）。`vcfg-builder/lib/options.ts`。
+- `mode="meta"` のとき `windowSize <= 0` で例外（予防的ガード）。`vcfg-builder/lib/options.ts`。
 - `jmp` の解決不可、ラベル未定義、重複ラベル、無効トークン、式の構文エラーはいずれも `ParseError` 派生の例外で通知。`muasm-ast/lib/parser.ts`、`vcfg-builder/lib/modes/*`。
 - meta: NS ノードは共有し、投機区間を示すメタノードのみ `type:"spec"` で追加します。
 

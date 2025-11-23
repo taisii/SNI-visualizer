@@ -14,6 +14,7 @@ import type {
   AnalysisError,
   AnalysisResult,
   TraceMode,
+  SpecRunMode,
 } from "@/lib/analysis-schema";
 import type { SpeculationMode } from "@/sni-engine";
 
@@ -30,7 +31,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [traceMode, setTraceMode] = useState<TraceMode>("single-path");
   const [speculationMode, setSpeculationMode] =
-    useState<SpeculationMode>("stack-guard");
+    useState<SpeculationMode>("discard");
+  const [specMode, setSpecMode] = useState<SpecRunMode>("light");
+  const [specWindow, setSpecWindow] = useState(20);
   const pendingBfsRetryRef = useRef(false);
   const lastWarningsToastRef = useRef<string | null>(null);
 
@@ -94,6 +97,8 @@ export default function Home() {
       const analysis = await analyze(source, {
         traceMode: modeToUse,
         speculationMode,
+        specMode,
+        specWindow,
       });
       if (analysis.error) {
         setAnalysisError(analysis.error);
@@ -259,6 +264,12 @@ export default function Home() {
               onTraceModeChange={(mode) => setTraceMode(mode)}
               speculationMode={speculationMode}
               onSpeculationModeChange={(mode) => setSpeculationMode(mode)}
+              specMode={specMode}
+              specWindow={specWindow}
+              onSpecModeChange={(mode) => setSpecMode(mode)}
+              onSpecWindowChange={(val) =>
+                setSpecWindow(Number.isFinite(val) && val > 0 ? val : 1)
+              }
             />
           </div>
           <div className="flex flex-1 flex-col gap-2">

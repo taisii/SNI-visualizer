@@ -16,10 +16,11 @@ describe("run-muasm CLI options", () => {
   afterEach(() => {
   });
 
-  it("defaults to bfs / stack-guard", () => {
+  it("defaults to bfs / discard / light", () => {
     const parsed = parseArgs([]);
     expect(parsed.options.traceMode).toBe("bfs");
-    expect(parsed.options.speculationMode).toBe("stack-guard");
+    expect(parsed.options.speculationMode).toBe("discard");
+    expect(parsed.options.specMode).toBe("light");
   });
 
   it("accepts dfs alias (single-path)", () => {
@@ -27,9 +28,14 @@ describe("run-muasm CLI options", () => {
     expect(parsed.options.traceMode).toBe("single-path");
   });
 
-  it("accepts stack-guard spec mode", () => {
-    const parsed = parseArgs(["--spec-mode", "stack-guard"]);
+  it("accepts stack-guard via speculation-mode", () => {
+    const parsed = parseArgs(["--speculation-mode", "stack-guard"]);
     expect(parsed.options.speculationMode).toBe("stack-guard");
+  });
+
+  it("accepts light spec graph mode", () => {
+    const parsed = parseArgs(["--spec-graph-mode", "light"]);
+    expect(parsed.options.specMode).toBe("light");
   });
 
   it("passes modes to analyze()", async () => {
@@ -58,6 +64,8 @@ describe("run-muasm CLI options", () => {
       {
         traceMode: "single-path",
         speculationMode: "discard",
+        specMode: "light",
+        specWindow: 5,
       },
       analyzeStub,
     );
@@ -69,6 +77,8 @@ describe("run-muasm CLI options", () => {
         traceMode: "single-path",
         speculationMode: "discard",
         windowSize: undefined,
+        specMode: "light",
+        specWindow: 5,
       },
     });
   });

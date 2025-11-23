@@ -6,8 +6,10 @@ import { normalizeOptions } from "./options";
 import { createProgramContext } from "./program-context";
 import { GraphBuilder } from "./graph-builder";
 import { buildMeta } from "./modes/meta";
+import { buildLight } from "./modes/light";
 
 export type { BuildOptions } from "../types";
+export type { BuildMode } from "../types";
 
 export function buildVCFG(
   sourceCode: string,
@@ -21,13 +23,17 @@ export function buildVCFGFromProgram(
   program: Program,
   options: BuildOptions = 20,
 ): StaticGraph {
-  const { windowSize, speculationMode } = normalizeOptions(options);
+  const { windowSize, speculationMode, mode } = normalizeOptions(options);
   const ctx = createProgramContext(program);
   const graph = new GraphBuilder();
 
   emitBaseNodes(ctx, graph);
 
-  buildMeta(ctx, graph, windowSize, speculationMode);
+  if (mode === "light") {
+    buildLight(ctx, graph, speculationMode);
+  } else {
+    buildMeta(ctx, graph, windowSize ?? 20, speculationMode);
+  }
 
   return graph.toGraph();
 }

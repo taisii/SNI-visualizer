@@ -15,7 +15,7 @@ beqz x, L
 skip
 L: skip
 `,
-      { windowSize: 2 },
+      { windowSize: 2, speculationMode: "stack-guard" },
     );
 
     const rollbackTargets = new Set(
@@ -32,7 +32,7 @@ beqz x, L
 spbarr
 L: skip
 `,
-      { windowSize: 3 },
+      { windowSize: 3, speculationMode: "stack-guard" },
     );
 
     // meta でも spbarr 以降で rollback が n2 に戻る
@@ -49,7 +49,7 @@ beqz x, L
 skip
 L: skip
 `,
-      { windowSize: 1 },
+      { windowSize: 1, speculationMode: "stack-guard" },
     );
     const rollbackTargets = new Set(
       graph.edges.filter((e) => e.type === "rollback").map((e) => e.target),

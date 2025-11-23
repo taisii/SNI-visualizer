@@ -143,6 +143,7 @@ describe("analyzeVCFG", () => {
 
     const res = await analyzeVCFG(graph, {
       policy: { regs: { ptr: "Low", hi: "High" } },
+      speculationMode: "stack-guard",
     });
 
     expect(res.result).toBe("Secure");
@@ -342,6 +343,7 @@ describe("analyzeVCFG", () => {
 
     const res = await analyzeVCFG(graph, {
       policy: { regs: { secret: "High", r: "Low", q: "Low", p: "Low" } },
+      speculationMode: "stack-guard",
     });
     expect(res.result).toBe("Secure");
 
@@ -764,6 +766,178 @@ L11:
     const res = await analyzeVCFG(graph, { maxSteps: 1 });
     expect(res.error?.message).toBe("maxSteps exceeded");
     expect(res.trace.steps.length).toBeGreaterThan(0);
+  });
+
+  it("specWindow が 1 のときは 2 ステップ目の投機を遮断する", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "skip"),
+        {
+          id: "sb",
+          pc: -1,
+          label: "spec-begin unit",
+          type: "spec",
+          instruction: "skip",
+          specContext: { id: "ctx1", phase: "begin" },
+        },
+        baseNode("n1", 1, "ns", "skip"),
+        baseNode("n2", 2, "ns", "load r secret"),
+      ],
+      edges: [
+        edge("n0", "sb", "spec"),
+        edge("sb", "n1", "spec"),
+        edge("n1", "n2", "spec"),
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      specMode: "light",
+      specWindow: 1,
+      policy: { mem: { secret: "High" }, regs: { secret: "High" } },
+    });
+
+    const visited = res.trace.steps.map((s) => s.nodeId);
+    expect(visited).toContain("n1");
+    expect(visited).not.toContain("n2");
+    expect(res.result).toBe("Secure");
+    const specStep = res.trace.steps.find((s) => s.nodeId === "n1");
+    expect(specStep?.specWindowRemaining).toBe(0);
+  });
+
+  it("specWindow を 2 にすると投機 2 ステップ目の漏洩を検出する", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "skip"),
+        {
+          id: "sb",
+          pc: -1,
+          label: "spec-begin unit",
+          type: "spec",
+          instruction: "skip",
+          specContext: { id: "ctx1", phase: "begin" },
+        },
+        baseNode("n1", 1, "ns", "skip"),
+        baseNode("n2", 2, "ns", "load r secret"),
+      ],
+      edges: [
+        edge("n0", "sb", "spec"),
+        edge("sb", "n1", "spec"),
+        edge("n1", "n2", "spec"),
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      specMode: "light",
+      specWindow: 2,
+      policy: { mem: { secret: "High" }, regs: { secret: "High" } },
+    });
+
+    const visited = res.trace.steps.map((s) => s.nodeId);
+    expect(visited).toContain("n2");
+    expect(res.result).toBe("SNI_Violation");
+  });
+
+  it("spec-begin への突入で外側 specWindow がデクリメントされる（内側終了後の外側 spec を遮断）", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "skip"),
+        // Outer speculation
+        specMetaNode("sbOuter", -1, "spec-begin outer", "begin", "ctxOuter"),
+        baseNode("n1", 1, "ns", "skip"),
+        // Inner speculation
+        specMetaNode("sbInner", -2, "spec-begin inner", "begin", "ctxInner"),
+        baseNode("n2", 2, "ns", "skip"),
+        specMetaNode("seInner", -3, "spec-end inner", "end", "ctxInner"),
+        baseNode("n3", 3, "ns", "load r secret"), // outer でのみ到達させたいノード
+      ],
+      edges: [
+        edge("n0", "sbOuter", "spec"),
+        edge("sbOuter", "n1", "spec"),
+        edge("n1", "sbInner", "spec"), // ここで inner を開始
+        edge("sbInner", "n2", "spec"),
+        edge("n2", "seInner", "spec"),
+        edge("seInner", "n1", "rollback"), // inner を抜けて outer に戻る
+        edge("n1", "n3", "spec"), // outer が残っていれば進むが、残量0なら遮断されるはず
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      specMode: "light",
+      specWindow: 1, // outer の窓を 1 に設定し、spec-begin で消費させる
+      policy: { mem: { secret: "High" }, regs: { secret: "High" } },
+      traceMode: "single-path",
+    });
+
+    const visited = res.trace.steps.map((s) => s.nodeId);
+    // outer window が 1 → sbOuter->n1 で 0 になり、sbInner に入れないことを確認
+    expect(visited).not.toContain("sbInner");
+    expect(visited).not.toContain("n3"); // outer が尽きているので追加の spec も遮断
+    expect(res.result).toBe("Secure");
+  });
+
+  it("外側の specWindow が尽きたら内側の spec-begin に入らない", async () => {
+    const graph: StaticGraph = {
+      nodes: [
+        baseNode("n0", 0, "ns", "skip"),
+        {
+          id: "sb1",
+          pc: -1,
+          label: "outer spec-begin",
+          type: "spec",
+          instruction: "skip",
+          specContext: { id: "ctx1", phase: "begin" },
+        },
+        baseNode("n1", 1, "ns", "skip"),
+        {
+          id: "sb2",
+          pc: -2,
+          label: "inner spec-begin",
+          type: "spec",
+          instruction: "skip",
+          specContext: { id: "ctx2", phase: "begin" },
+        },
+        baseNode("n2", 2, "ns", "load r secret"),
+      ],
+      edges: [
+        edge("n0", "sb1", "spec"),
+        edge("sb1", "n1", "spec"),
+        edge("n1", "sb2", "spec"),
+        edge("sb2", "n2", "spec"),
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      specMode: "light",
+      specWindow: 1,
+      policy: { mem: { secret: "High" }, regs: { secret: "High" } },
+    });
+
+    const visited = res.trace.steps.map((s) => s.nodeId);
+    expect(visited).toContain("sb1");
+    expect(visited).toContain("n1");
+    expect(visited).not.toContain("sb2");
+    expect(visited).not.toContain("n2");
+    const n1Step = res.trace.steps.find((s) => s.nodeId === "n1");
+    expect(n1Step?.specWindowRemaining).toBe(0);
+    expect(res.result).toBe("Secure");
+  });
+
+  it("specWindow が 0 以下ならエラーを返し解析を行わない", async () => {
+    const graph: StaticGraph = {
+      nodes: [baseNode("n0", 0, "ns", "skip")],
+      edges: [],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      specMode: "light",
+      specWindow: 0,
+      policy: {},
+    });
+
+    expect(res.error?.type).toBe("AnalysisError");
+    expect(res.error?.message).toContain("specWindow must be greater than 0");
+    expect(res.trace.steps).toEqual([]);
+    expect(res.result).toBe("SNI_Violation");
   });
 
   it("returns partial trace when iterationCap is exceeded", async () => {
