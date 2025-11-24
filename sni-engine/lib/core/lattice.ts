@@ -52,21 +52,21 @@ const JOIN_TABLE: Record<LatticeValue, Record<LatticeValue, LatticeValue>> = {
     Leak: "Leak",
     Top: "Top",
   },
-  Top: {
-    Bot: "Top",
-    EqLow: "Top",
-    EqHigh: "Top",
-    Diverge: "Top",
-    Leak: "Leak",
-    Top: "Top",
-  },
   Leak: {
     Bot: "Leak",
     EqLow: "Leak",
     Diverge: "Leak",
     EqHigh: "Leak",
     Leak: "Leak",
-    Top: "Leak",
+    Top: "Top",
+  },
+  Top: {
+    Bot: "Top",
+    EqLow: "Top",
+    EqHigh: "Top",
+    Diverge: "Top",
+    Leak: "Top",
+    Top: "Top",
   },
 };
 

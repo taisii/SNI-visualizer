@@ -36,21 +36,21 @@ const expected = {
     Leak: "Leak",
     Top: "Top",
   },
-  Top: {
-    Bot: "Top",
-    EqLow: "Top",
-    EqHigh: "Top",
-    Diverge: "Top",
-    Leak: "Leak",
-    Top: "Top",
-  },
   Leak: {
     Bot: "Leak",
     EqLow: "Leak",
     Diverge: "Leak",
     EqHigh: "Leak",
     Leak: "Leak",
-    Top: "Leak",
+    Top: "Top",
+  },
+  Top: {
+    Bot: "Top",
+    EqLow: "Top",
+    EqHigh: "Top",
+    Diverge: "Top",
+    Leak: "Top",
+    Top: "Top",
   },
 } as const;
 
@@ -72,8 +72,8 @@ describe("toDisplay", () => {
     expect(toDisplay("Leak").style).toBe("danger");
   });
 
-  it("treats Leak as absorbing even when joined with Top", () => {
-    expect(join("Top", "Leak")).toBe("Leak");
-    expect(join("Leak", "Top")).toBe("Leak");
+  it("treats Top as absorbing when joined with Leak", () => {
+    expect(join("Top", "Leak")).toBe("Top");
+    expect(join("Leak", "Top")).toBe("Top");
   });
 });
