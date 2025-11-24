@@ -26,6 +26,7 @@ export function stateToSections(
   const obsMem: Record<string, ReturnType<typeof toDisplay>> = {};
   const obsCtrl: Record<string, ReturnType<typeof toDisplay>> = {};
   const stackData: Record<string, ReturnType<typeof toDisplay>> = {};
+  const budgetData: Record<string, ReturnType<typeof toDisplay>> = {};
 
   for (const [k, v] of state.regs) {
     regs[k] = {
@@ -56,6 +57,12 @@ export function stateToSections(
       };
     });
   }
+  // budget 表示（Spec モード時のみ有意。NS は inf）
+  budgetData.w = {
+    label: state.budget === "inf" ? "∞" : String(state.budget),
+    style: "info",
+    description: "残り投機ステップ（Pruning-VCFG）",
+  };
 
   const hasMemViolation = Array.from(state.obsMem.values()).some(
     (v) => v === "Leak",
@@ -94,6 +101,14 @@ export function stateToSections(
     type: "key-value" as const,
     data: stackData,
   });
+  if (state.budget !== "inf") {
+    sections.push({
+      id: "specBudget",
+      title: "Speculation Budget",
+      type: "key-value" as const,
+      data: budgetData,
+    });
+  }
 
   return { sections };
 }

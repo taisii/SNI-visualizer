@@ -11,6 +11,7 @@ function makeState(): AbsState {
     mem: new Map(),
     obsMem: new Map(),
     obsCtrl: new Map(),
+    budget: "inf",
   };
 }
 
@@ -77,5 +78,20 @@ describe("stateToSections", () => {
     expect(specSection?.data.d2.description).toBe("仮定: x == 0");
     expect(specSection?.data.d1.label).toBe("bnez y, L2");
     expect(specSection?.data.d1.description).toBe("仮定: y != 0");
+  });
+
+  it("omits budget section for non-speculative (infinite) budget", () => {
+    const sections = stateToSections(makeState()).sections;
+    const budgetSection = sections.find((s) => s.id === "specBudget");
+    expect(budgetSection).toBeUndefined();
+  });
+
+  it("shows budget section when budget is finite", () => {
+    const finite = makeState();
+    finite.budget = 3;
+    const sections = stateToSections(finite).sections;
+    const budgetSection = sections.find((s) => s.id === "specBudget");
+    expect(budgetSection).toBeDefined();
+    expect(budgetSection?.data.w.label).toBe("3");
   });
 });

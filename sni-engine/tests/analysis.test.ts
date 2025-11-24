@@ -77,15 +77,15 @@ describe("analyzeVCFG (pruning VCFG)", () => {
       edges: [edge("n0", "sb", "spec"), edge("sb", "n1", "ns")],
     };
     const res = await analyzeVCFG(graph, {
-      specWindow: 2,
+      specWindow: 3,
       policy: { regs: { a: "Low", r: "Low" } },
     });
     const sbStep = res.trace.steps.find((s) => s.nodeId === "sb");
     const n1Step = res.trace.steps.find((s) => s.nodeId === "n1");
-    expect(sbStep?.specWindowRemaining).toBe(2);
+    expect(sbStep?.specWindowRemaining).toBe(3);
     expect(n1Step?.executionMode).toBe("Speculative");
     // ns edge でもステップ実行で減算される
-    expect(n1Step?.specWindowRemaining).toBe(1);
+    expect(n1Step?.specWindowRemaining).toBe(2);
   });
 
   it("prunes speculative edge when window is exhausted", async () => {
@@ -107,7 +107,7 @@ describe("analyzeVCFG (pruning VCFG)", () => {
       ],
     };
     const res = await analyzeVCFG(graph, {
-      specWindow: 1,
+      specWindow: 2,
       policy: { mem: { secret: "High" }, regs: { secret: "High", r: "Low" } },
     });
     const visited = res.trace.steps.map((s) => s.nodeId);
@@ -116,6 +116,33 @@ describe("analyzeVCFG (pruning VCFG)", () => {
     expect(visited).not.toContain("s2");
     const s1Step = res.trace.steps.find((s) => s.nodeId === "s1");
     expect(s1Step?.specWindowRemaining).toBe(1);
+  });
+
+  it("keeps larger budget on join to avoid losing reachable speculative steps", async () => {
+    // sb -> s2 (spec) と sb -> t1(ns) -> s2(spec) で budget=2 と 1 が合流する
+    const graph: StaticGraph = {
+      nodes: [
+        node("n0", 0, "ns", "skip"),
+        specBegin("sb", -1, "ctx"),
+        node("t1", 1, "spec", "skip"),
+        {
+          ...node("s2", 2, "spec", "skip"),
+          specContext: { id: "ctx", phase: "end" },
+        },
+        node("s3", 3, "spec", "skip"),
+      ],
+      edges: [
+        edge("n0", "sb", "spec"),
+        edge("sb", "s2", "spec"), // 短い経路 (budget 2)
+        edge("sb", "t1", "ns"), // 長い経路 (budget 1)
+        edge("t1", "s2", "spec"),
+        edge("s2", "s3", "spec"),
+      ],
+    };
+    const res = await analyzeVCFG(graph, { specWindow: 3 });
+    const visited = res.trace.steps.map((s) => s.nodeId);
+    // budget の大きい経路を保持できていれば s3 まで到達する
+    expect(visited).toContain("s3");
   });
 
   it("returns ParseError instead of throwing on invalid graph", async () => {
@@ -366,7 +393,7 @@ describe("analyzeVCFG (pruning VCFG)", () => {
       ],
     };
     const res = await analyzeVCFG(graph, {
-      specWindow: 1,
+      specWindow: 2,
       policy: { mem: { secret: "High" }, regs: { secret: "High", r: "Low" } },
     });
     const visited = res.trace.steps.map((s) => s.nodeId);

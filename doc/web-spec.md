@@ -1,7 +1,7 @@
 # Web UI 現行仕様サマリ（実装ベース）
 
 - 作成日: 2025-11-17  
-- 最終更新: 2025-11-23（実装と整合）  
+- 最終更新: 2025-11-24（実装と整合）  
 - 対象: Web UI 実装担当 / 研究用デモ利用者  
 - 根拠: `app/(analysis)/page.tsx`・`app/(analysis)/features/*`・`lib/analysis-engine/index.ts`・`lib/analysis-schema/index.ts`
 
@@ -71,11 +71,12 @@ UI からの単一ファサード `analyze(sourceCode: string, options?: Analyze
   - 「リセット」: 結果・ステップ・Auto Play を初期化。  
   - Prev / Next: ステップ境界で活性/非活性を切替。  
   - Auto Play: 800ms 間隔でステップ前進。`isViolation` または末尾到達で自動停止。  
-  - ステップ表示: `Step (current+1) / max`。未解析時は `--/--`。
-  - 投機モード選択 UI はなし。  
+  - ステップ表示: `Step (current+1) / max`。未解析時は `--/--`。  
+  - `traceMode` セレクタ (DFS/single-path または BFS)。  
+  - `specWindow` 数値入力を持ち、light モードの残り投機長を指定して `analyze` に渡す（既定 20）。  
 - **CodeEditor**: MuASM テキストエリアを単一 Accordion で折りたたみ可能にしたもの。デモコードリセットボタン付き。入力変更はソースだけを更新し、解析結果は保持したまま。  
 - **VCFGView**: React Flow で VCFG を描画。`type` で色分け（ノード: ns=青・spec=橙／エッジ: ns=グレー・spec=橙）し、`activeNodeId` を強調表示。light 形態のみを描画し、rollback エッジは存在しない。データが無い場合はプレースホルダ。左ペイン下部に配置し、`flex-1` + `min-h` で列の残り高さを占有する。  
-- **StateViewer**: `sections` を反復描画。`alert` で赤枠＋ALERT バッジ、`DisplayValue.style` を色付きバッジで表示。データが無い場合はプレースホルダ。右ペイン下部に配置。投機スタック表示はスタックが非空ならモードに関係なく描画され、`MaxSpeculationDepth` 警告は両モードで発生しうる（深さ上限で新規 spec-begin への突入をスキップ）。
+- **StateViewer**: `sections` を反復描画。`alert` で赤枠＋ALERT バッジ、`DisplayValue.style` を色付きバッジで表示。データが無い場合はプレースホルダ。右ペイン下部に配置。投機スタック表示はスタックが非空ならモードに関係なく描画される。現行の投機ガードは `specWindow` カウンタのみで、深さ上限制御や `MaxSpeculationDepth` 警告は実装していない。
 - **Toast (sonner)**: 解析失敗時にエラー文言を表示し、「再解析」アクションで再実行できる。
 
 ### 2.3 レイアウト概要（現行実装の意図）

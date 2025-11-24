@@ -1,7 +1,7 @@
 # SNI-engine 現行仕様サマリ (実装ベース)
 
 - 作成日: 2025-11-17  
-- 最終更新: 2025-11-23（実装と整合）  
+- 最終更新: 2025-11-24（実装と整合）  
 - 対象: SNI 解析コア利用者・実装担当  
 - 根拠: `sni-engine/lib/*.ts`（実装コード）、旧 `project.md` / `requirements-and-plan.md`
 
@@ -81,7 +81,7 @@ UI に渡す際は、`obsMem` と `obsCtrl` をそれぞれ
 順序・Join は `src/lattice.ts` の `ORDER` および `JOIN_TABLE` に従う:
 
 ```text
-Bot < EqLow < EqHigh < Diverge < Leak < Top
+Bot < EqLow < Diverge < EqHigh < Leak < Top
 ```
 
 意味づけ（実装が前提にしている直観）は以下の通り:
@@ -90,7 +90,7 @@ Bot < EqLow < EqHigh < Diverge < Leak < Top
 - `EqLow`: NS/Spec とも Low で等価
 - `EqHigh`: NS/Spec とも High で等価（「既に許容された漏洩」的な扱い）
 - `Diverge`: NS/Spec とも Low だが値が分岐し得る
-- `Leak`: NS/Spec 間で High 情報の非対称な観測が生じている可能性
+- `Leak`: NS/Spec 間で High 情報の非対称な観測が生じている可能性（吸収元）
 - `Top`: 解析不能・複数状態の混合（安全側に倒す）
 
 ### 2.3 初期化ポリシ

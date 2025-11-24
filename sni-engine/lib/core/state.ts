@@ -12,6 +12,9 @@ export type RelValue = {
   rel: LatticeValue;
 };
 
+// 投機リソースカウンタ w#: 非投機は "inf"、投機中は残りステップ数（0 以上）
+export type SpecBudget = number | "inf";
+
 export type InitPolicy = {
   regs?: Record<string, SecurityLevel>;
   mem?: Record<string, SecurityLevel>;
@@ -24,6 +27,8 @@ export type AbsState = {
   obsMem: Map<string, LatticeValue>;
   // 分岐やジャンプに関する観測履歴 (CTRLLEAK 用)
   obsCtrl: Map<string, LatticeValue>;
+  // 投機リソースカウンタ（モード依存で解釈）
+  budget: SpecBudget;
 };
 
 export function bottomState(): AbsState {
@@ -32,6 +37,7 @@ export function bottomState(): AbsState {
     mem: new Map(),
     obsMem: new Map(),
     obsCtrl: new Map(),
+    budget: "inf",
   };
 }
 
@@ -41,6 +47,7 @@ export function cloneState(src: AbsState): AbsState {
     mem: new Map(src.mem),
     obsMem: new Map(src.obsMem),
     obsCtrl: new Map(src.obsCtrl),
+    budget: src.budget,
   };
 }
 
@@ -91,7 +98,7 @@ export function initState(
     }
   }
 
-  return { regs, mem, obsMem, obsCtrl };
+  return { regs, mem, obsMem, obsCtrl, budget: "inf" };
 }
 
 /**
@@ -149,6 +156,18 @@ export function joinSecurity(
 
 export function isHighLike(v: SecurityPoint): boolean {
   return v === "High" || v === "Top";
+}
+
+// --- Speculative budget helpers ---
+export function joinBudget(a: SpecBudget, b: SpecBudget): SpecBudget {
+  // 到達可能な残量の上限を保持する（探索を取りこぼさない）
+  if (a === "inf" || b === "inf") return "inf";
+  return Math.max(a, b);
+}
+
+export function decrementBudget(b: SpecBudget): SpecBudget {
+  if (b === "inf") return "inf";
+  return b - 1;
 }
 
 // --- RelValue 補助 ---

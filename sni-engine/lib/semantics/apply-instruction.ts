@@ -1,6 +1,6 @@
 import type { GraphNode, TraceStep } from "@/lib/analysis-schema";
 import type { Instruction, Expr } from "@/muasm-ast";
-import type { LatticeValue } from "../core/lattice";
+import { join as joinLattice, type LatticeValue } from "../core/lattice";
 import {
   cloneState,
   type AbsState,
@@ -10,7 +10,7 @@ import {
   securityToLattice,
   makeRel,
 } from "../core/state";
-import { getMem, getReg, setMem, setReg } from "../core/state-ops";
+import { getMem, getReg, setMem, setReg, relJoin } from "../core/state-ops";
 import {
   updateCtrlObsNS,
   updateCtrlObsSpec,
@@ -64,20 +64,35 @@ export function applyInstruction(
       ? toMemObsId(node.pc, ast.addr)
       : undefined;
 
-  const setValue = (kind: "reg" | "mem", name: string, value: RelValue) => {
-    if (executionMode === "NS") {
-      const v = makeRel(value.ns, value.sp);
-      kind === "reg" ? setReg(next, name, v) : setMem(next, name, v);
-    } else {
-      const prev = kind === "reg" ? getReg(next, name) : getMem(next, name);
-      const updated: RelValue = makeRel(
-        prev.ns,
-        joinSecurity(prev.sp, value.sp),
-      );
-      kind === "reg"
-        ? setReg(next, name, updated)
-        : setMem(next, name, updated);
-    }
+  const applyNSWrite = (
+    prev: RelValue,
+    value: RelValue,
+    strong: boolean,
+  ): RelValue => {
+    if (strong) return makeRel(value.ns, value.sp);
+    return relJoin(prev, value);
+  };
+
+  const applySpecWrite = (prev: RelValue, value: RelValue): RelValue => {
+    // 投機中は NS 成分は保持しつつ、SP を join するだけにとどめる。
+    // Diverge を足さないことで不要な Top への押し上げを避ける。
+    const ns = prev.ns;
+    const sp = joinSecurity(prev.sp, value.sp);
+    return makeRel(ns, sp);
+  };
+
+  const setValue = (
+    kind: "reg" | "mem",
+    name: string,
+    value: RelValue,
+    strong = true,
+  ) => {
+    const prev = kind === "reg" ? getReg(next, name) : getMem(next, name);
+    const updated =
+      executionMode === "NS"
+        ? applyNSWrite(prev, value, strong)
+        : applySpecWrite(prev, value);
+    kind === "reg" ? setReg(next, name, updated) : setMem(next, name, updated);
   };
 
   const observeMem = (val: LatticeValue) => {
@@ -118,7 +133,8 @@ export function applyInstruction(
       );
       const observedPoint = executionMode === "NS" ? lAddr.ns : lAddr.sp;
       observeMem(isHighLike(observedPoint) ? "EqHigh" : "EqLow");
-      setValue("mem", defaultMemLabel(ast.addr), v);
+      const strong = ast.addr.kind !== "reg"; // レジスタ経由は曖昧なので weak update
+      setValue("mem", defaultMemLabel(ast.addr), v, strong);
       break;
     }
     case "cmov": {

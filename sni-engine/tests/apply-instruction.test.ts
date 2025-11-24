@@ -21,6 +21,7 @@ describe("applyInstruction (cmov)", () => {
       mem: new Map(),
       obsMem: new Map(),
       obsCtrl: new Map(),
+      budget: "inf",
     };
 
     const next = applyInstruction(node, state, "NS");
@@ -29,5 +30,28 @@ describe("applyInstruction (cmov)", () => {
     expect(dst?.ns).toBe("Top");
     expect(dst?.sp).toBe("High");
     expect(dst?.rel).toBe("Top"); // rel が再計算されることを確認
+  });
+
+  it("does not introduce Diverge on speculative store with consistent value", () => {
+    const node: GraphNode = {
+      id: "n0",
+      pc: 0,
+      type: "spec",
+      instruction: "store r1, 0",
+    };
+    const base = makeRel("Low", "Low");
+    const state: AbsState = {
+      regs: new Map([["r1", base]]),
+      mem: new Map([["0", base]]),
+      obsMem: new Map(),
+      obsCtrl: new Map(),
+      budget: 2,
+    };
+
+    const next = applyInstruction(node, state, "Speculative");
+    const memRel = next.mem.get("0");
+    expect(memRel?.rel).toBe("EqLow");
+    expect(memRel?.sp).toBe("Low");
+    expect(memRel?.ns).toBe("Low");
   });
 });

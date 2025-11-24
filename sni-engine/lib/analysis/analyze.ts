@@ -24,6 +24,7 @@ import {
 } from "../core/state-ops";
 import { stateToSections, type SpecContextInfo } from "./state-to-sections";
 import { collectRegisterNames } from "./registers";
+import { cloneState, decrementBudget } from "../core/state";
 
 export type AnalyzeOptions = {
   iterationCap?: number;
@@ -42,8 +43,7 @@ const DEFAULT_SPEC_WINDOW = 20;
 
 type LogStack = readonly string[];
 
-const makeModeKey = (mode: ExecutionMode, window: number | null): string =>
-  mode === "NS" ? "NS" : `Speculative|w:${window ?? "inf"}`;
+const makeModeKey = (mode: ExecutionMode): string => mode;
 
 const deriveInitialLogStack = (
   node: GraphNode,
@@ -158,11 +158,11 @@ export async function analyzeVCFG(
   const entryMode: ExecutionMode =
     entryNode.type === "spec" ? "Speculative" : "NS";
   const entryLogStack = deriveInitialLogStack(entryNode, entryMode);
-  const entryWindow =
-    specWindowActive && entryMode === "Speculative" ? specWindow : null;
-  const entryModeKey = makeModeKey(entryMode, entryWindow);
+  const entryModeKey = makeModeKey(entryMode);
   ensureState(entryNode.id, entryModeKey);
   const seededInit = initState(opts.policy, opts.entryRegs);
+  seededInit.budget =
+    entryMode === "Speculative" && specWindowActive ? specWindow : "inf";
   seedRegs(seededInit, usedRegs);
   states.get(entryNode.id)?.set(entryModeKey, seededInit);
 
@@ -170,14 +170,12 @@ export async function analyzeVCFG(
     nodeId: string;
     executionMode: ExecutionMode;
     logStack: LogStack;
-    window: number | null;
   };
   const worklist: WorkItem[] = [
     {
       nodeId: entryNode.id,
       executionMode: entryMode,
       logStack: entryLogStack,
-      window: entryWindow,
     },
   ];
   const takeNext = (): WorkItem | undefined =>
@@ -193,7 +191,8 @@ export async function analyzeVCFG(
     nodeId: "", // entry はどのノードにもフォーカスさせない
     description: "(entry)",
     executionMode: entryMode,
-    specWindowRemaining: entryWindow ?? undefined,
+    specWindowRemaining:
+      entryMode === "Speculative" && specWindowActive ? specWindow : undefined,
     state: stateToSections(init, {
       specStack: entryLogStack,
       specContextInfo,
@@ -204,22 +203,27 @@ export async function analyzeVCFG(
   while (worklist.length > 0) {
     const shifted = takeNext();
     if (!shifted) break;
-    const { nodeId, executionMode, logStack, window } = shifted;
+    const { nodeId, executionMode, logStack } = shifted;
     const node = nodeMap.get(nodeId);
     if (!node) continue;
-    const modeKey = makeModeKey(executionMode, window);
+    const modeKey = makeModeKey(executionMode);
     const inState = ensureState(nodeId, modeKey);
     seedRegs(inState, usedRegs);
 
-    let currentWindowRemaining: number | undefined;
-    let nextWindowBase: number | null = window;
-    let budgetExhausted = false;
+    let currentBudget: number | undefined;
+    let nextBudget: number | "inf" = inState.budget;
 
     if (specWindowActive && executionMode === "Speculative") {
-      currentWindowRemaining = (window ?? specWindow) as number;
-      // specWindow は命令ステップごとに 1 減算する（エッジ種別に依存しない）
-      nextWindowBase = currentWindowRemaining - 1;
-      budgetExhausted = currentWindowRemaining <= 0;
+      currentBudget =
+        inState.budget === "inf" ? specWindow : (inState.budget as number);
+      if (currentBudget <= 0) {
+        // Pruning: これ以上遷移しない
+        continue;
+      }
+      nextBudget =
+        inState.budget === "inf"
+          ? "inf"
+          : (decrementBudget(inState.budget) as number);
     }
 
     let outState: AbsState;
@@ -241,6 +245,7 @@ export async function analyzeVCFG(
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
+    outState.budget = nextBudget;
     states.get(nodeId)?.set(modeKey, outState);
 
     stepId += 1;
@@ -279,7 +284,7 @@ export async function analyzeVCFG(
       nodeId,
       description: node.label ?? "",
       executionMode,
-      specWindowRemaining: currentWindowRemaining,
+      specWindowRemaining: currentBudget,
       state: stateToSections(outState, {
         specStack: logStack,
         specContextInfo,
@@ -313,13 +318,8 @@ export async function analyzeVCFG(
         }
       }
 
-      if (budgetExhausted && e.type === "spec") {
-        // specWindow が尽きたら追加の spec 遷移は遮断する
-        continue;
-      }
-
       let targetExecutionMode: ExecutionMode = executionMode;
-      let nextWindow: number | null = nextWindowBase;
+      const successorState = cloneState(outState);
       let nextLogStack: LogStack = logStack;
 
       if (e.type === "spec") {
@@ -330,41 +330,46 @@ export async function analyzeVCFG(
           nextLogStack = targetNode?.specContext?.id
             ? [...logStack, targetNode.specContext.id]
             : logStack;
-          nextWindow = specWindowActive ? specWindow : null;
+          // NS -> spec-begin のときだけリセット。既に投機中なら残量を引き継ぐ。
+          if (executionMode === "NS") {
+            successorState.budget =
+              specWindowActive && targetExecutionMode === "Speculative"
+                ? specWindow
+                : "inf";
+          } else {
+            successorState.budget = outState.budget;
+          }
         } else {
-          if (specWindowActive && nextWindow !== null && nextWindow < 0)
-            continue;
+          successorState.budget = outState.budget;
         }
-      } else if (specWindowActive && targetExecutionMode === "Speculative") {
-        // 投機モードで NS エッジを進む場合も命令ステップとして減算済みの nextWindowBase を引き継ぐ
-        if (nextWindow !== null && nextWindow < 0) continue;
+      } else if (targetExecutionMode === "Speculative") {
+        successorState.budget = outState.budget;
+      } else {
+        successorState.budget = "inf";
       }
 
       if (
         specWindowActive &&
         targetExecutionMode === "Speculative" &&
-        nextWindow !== null &&
-        nextWindow < 0
+        successorState.budget !== "inf" &&
+        successorState.budget <= 0
       ) {
         continue;
       }
 
-      const targetModeKey = makeModeKey(targetExecutionMode, nextWindow);
+      const targetModeKey = makeModeKey(targetExecutionMode);
       const existingStates = states.get(tgtId);
       const hadState = existingStates?.has(targetModeKey) ?? false;
       const tgtState = ensureState(tgtId, targetModeKey);
       seedRegs(tgtState, usedRegs);
 
-      const { changed } = mergeState(tgtState, outState);
+      const { changed } = mergeState(tgtState, successorState);
       const needsVisit = changed || !hadState;
       if (needsVisit) {
-        ensureState(tgtId, targetModeKey);
-        states.get(tgtId)?.set(targetModeKey, tgtState);
         worklist.push({
           nodeId: tgtId,
           executionMode: targetExecutionMode,
           logStack: nextLogStack,
-          window: nextWindow,
         });
       }
     }

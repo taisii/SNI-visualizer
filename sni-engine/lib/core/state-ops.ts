@@ -6,6 +6,7 @@ import {
   defaultRegRel,
   joinSecurity,
   makeRel,
+  joinBudget,
 } from "./state";
 import { mergeObservation } from "./observations";
 
@@ -53,6 +54,16 @@ export function mergeState(
 ): { changed: boolean } {
   const { regs = true, mem = true, obsMem = true, obsCtrl = true } = opts;
   let changed = false;
+  const mergedBudget =
+    dst.budget === "inf" && src.budget !== "inf"
+      ? src.budget
+      : dst.budget !== "inf" && src.budget === "inf"
+        ? dst.budget
+        : joinBudget(dst.budget, src.budget);
+  if (mergedBudget !== dst.budget) {
+    dst.budget = mergedBudget;
+    changed = true;
+  }
   if (regs) {
     for (const [k, v] of src.regs) {
       const cur = dst.regs.get(k) ?? defaultRegRel();
@@ -114,14 +125,4 @@ export function stateHasTop(state: AbsState): boolean {
     if (v === "Top") return true;
   }
   return false;
-}
-
-export function extractObservations(state: AbsState): AbsState {
-  const obsOnly = {
-    regs: new Map(),
-    mem: new Map(),
-    obsMem: new Map(state.obsMem),
-    obsCtrl: new Map(state.obsCtrl),
-  };
-  return obsOnly;
 }
