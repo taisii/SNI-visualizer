@@ -267,6 +267,11 @@ export async function analyzeVCFG(
     }
     const violation = stateHasViolation(outState);
     const hasTop = stateHasTop(outState);
+    const dropNonObservables =
+      executionMode === "Speculative" &&
+      specWindowActive &&
+      outState.budget !== "inf" &&
+      outState.budget <= 0;
     if (hasTop) {
       const warnKey = `${nodeId}|${executionMode}`;
       if (!topWarned.has(warnKey)) {
@@ -288,6 +293,7 @@ export async function analyzeVCFG(
       state: stateToSections(outState, {
         specStack: logStack,
         specContextInfo,
+        dropNonObservables,
       }),
       isViolation: violation,
     });

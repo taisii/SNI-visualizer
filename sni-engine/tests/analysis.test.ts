@@ -400,4 +400,33 @@ describe("analyzeVCFG (pruning VCFG)", () => {
     expect(visited).toContain("s1");
     expect(visited).not.toContain("s2"); // w が 0 でプルーニング
   });
+
+  it("drops regs/mem only when speculative budget hits zero (pruned state)", async () => {
+    // specWindow=1 なので spec-begin を踏んだ直後に budget が 0 になり、そのステップは観測だけ残す
+    const program = `beqz x, L1
+load r, secret
+L1: skip
+`;
+    const graph = buildVCFG(program);
+    const res = await analyzeVCFG(graph, {
+      policy: { regs: { x: "Low", secret: "High", r: "Low" }, mem: { secret: "High" } },
+      traceMode: "single-path",
+      specWindow: 1,
+    });
+
+    const prunedSpecStep = res.trace.steps.find(
+      (s) => s.executionMode === "Speculative",
+    );
+    expect(prunedSpecStep).toBeDefined();
+    const sectionIds = prunedSpecStep?.state.sections.map((s) => s.id) ?? [];
+    expect(sectionIds).not.toContain("regs");
+    expect(sectionIds).not.toContain("mem");
+    expect(sectionIds).toContain("obsMem");
+
+    // NS ステップは従来どおり regs/mem を表示
+    const nsStep = res.trace.steps.find((s) => s.executionMode === "NS");
+    const nsSectionIds = nsStep?.state.sections.map((s) => s.id) ?? [];
+    expect(nsSectionIds).toContain("regs");
+    expect(nsSectionIds).toContain("mem");
+  });
 });

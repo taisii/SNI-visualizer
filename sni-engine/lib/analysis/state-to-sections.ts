@@ -1,6 +1,7 @@
 import type { StateSection } from "@/lib/analysis-schema";
-import { toDisplay } from "../core/lattice";
+import { join, toDisplay } from "../core/lattice";
 import type { AbsState } from "../core/state";
+import { securityToLattice } from "../core/state";
 
 type SpecStack = readonly string[] | undefined;
 
@@ -14,13 +15,18 @@ export type SpecContextInfo = {
 type StateToSectionsOptions = {
   specStack?: SpecStack;
   specContextInfo?: Map<string, SpecContextInfo>;
+  /**
+   * 投機パスを「観測だけ残して廃棄」するためのフラグ。
+   * true のとき regs/mem セクションを生成しない。
+   */
+  dropNonObservables?: boolean;
 };
 
 export function stateToSections(
   state: AbsState,
   options: StateToSectionsOptions = {},
 ) {
-  const { specStack, specContextInfo } = options;
+  const { specStack, specContextInfo, dropNonObservables = false } = options;
   const regs: Record<string, ReturnType<typeof toDisplay>> = {};
   const mem: Record<string, ReturnType<typeof toDisplay>> = {};
   const obsMem: Record<string, ReturnType<typeof toDisplay>> = {};
@@ -29,14 +35,16 @@ export function stateToSections(
   const budgetData: Record<string, ReturnType<typeof toDisplay>> = {};
 
   for (const [k, v] of state.regs) {
+    const joined = join(securityToLattice(v.ns), securityToLattice(v.sp));
     regs[k] = {
-      ...toDisplay(v.rel),
+      ...toDisplay(joined),
       detail: { ns: v.ns, sp: v.sp },
     };
   }
   for (const [k, v] of state.mem) {
+    const joined = join(securityToLattice(v.ns), securityToLattice(v.sp));
     mem[k] = {
-      ...toDisplay(v.rel),
+      ...toDisplay(joined),
       detail: { ns: v.ns, sp: v.sp },
     };
   }
@@ -73,13 +81,6 @@ export function stateToSections(
 
   const sections: StateSection[] = [
     {
-      id: "regs",
-      title: "Registers",
-      type: "key-value" as const,
-      data: regs,
-    },
-    { id: "mem", title: "Memory", type: "key-value" as const, data: mem },
-    {
       id: "obsMem",
       title: "Memory Observations",
       type: "key-value" as const,
@@ -94,6 +95,18 @@ export function stateToSections(
       alert: hasCtrlViolation,
     },
   ];
+
+  if (!dropNonObservables) {
+    sections.unshift(
+      { id: "mem", title: "Memory", type: "key-value" as const, data: mem },
+    );
+    sections.unshift({
+      id: "regs",
+      title: "Registers",
+      type: "key-value" as const,
+      data: regs,
+    });
+  }
 
   sections.push({
     id: "specStack",
