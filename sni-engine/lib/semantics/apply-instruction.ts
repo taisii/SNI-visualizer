@@ -74,11 +74,14 @@ export function applyInstruction(
   };
 
   const applySpecWrite = (prev: RelValue, value: RelValue): RelValue => {
-    // 投機中は NS 成分は保持しつつ、SP を join するだけにとどめる。
-    // Diverge を足さないことで不要な Top への押し上げを避ける。
+    // 投機中は NS 成分は保持しつつ、SP を join したうえで
+    // 低機密値の乖離を保守的に表すために Diverge を付与する。
     const ns = prev.ns;
     const sp = joinSecurity(prev.sp, value.sp);
-    return makeRel(ns, sp);
+    // 既存 rel も保持した上で Diverge を吸収させる。
+    const relBase = joinLattice(prev.rel, makeRel(ns, sp).rel);
+    const rel = joinLattice(relBase, "Diverge");
+    return { ns, sp, rel };
   };
 
   const setValue = (
