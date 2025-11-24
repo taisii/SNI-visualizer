@@ -167,5 +167,7 @@ function getJoinOfCondAndVal(
 }
 
 function joinPair(a: RelValue, b: RelValue): RelValue {
-  return { ns: joinSecurity(a.ns, b.ns), sp: joinSecurity(a.sp, b.sp) };
+  const ns = joinSecurity(a.ns, b.ns);
+  const sp = joinSecurity(a.sp, b.sp);
+  return makeRel(ns, sp);
 }

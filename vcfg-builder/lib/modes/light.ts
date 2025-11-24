@@ -3,16 +3,11 @@ import { ParseError } from "@/muasm-ast";
 import type { GraphBuilder } from "../graph-builder";
 
 /**
- * 投機ウィンドウを展開せず、投機開始/終了メタノードだけを付与する軽量モード。
+ * 投機ウィンドウを展開せず、分岐ごとに 1 つの spec-begin メタノードだけを付与する軽量モード。
  * - NS エッジは通常の CFG と同じ形で張る。
- * - 分岐ごとに spec-begin / spec-end を 1 組だけ生成し、投機の開始点をマーキングする。
- * - 投機長の管理は解析エンジン側 (specWindow) に委譲する。
+ * - rollback / spec-end ノードは生成しない（Pruning は解析エンジン側の specWindow で制御）。
  */
-export function buildLight(
-  ctx: ProgramContext,
-  graph: GraphBuilder,
-  _speculationMode: "discard" = "discard",
-) {
+export function buildLight(ctx: ProgramContext, graph: GraphBuilder) {
   const { program, resolveJump, resolveLabel, hasPc } = ctx;
 
   let virtualPc = -1;

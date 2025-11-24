@@ -22,13 +22,13 @@ export function buildVCFGFromProgram(
   program: Program,
   options: BuildOptions = {},
 ): StaticGraph {
-  const { speculationMode } = normalizeOptions(options);
+  normalizeOptions(options);
   const ctx = createProgramContext(program);
   const graph = new GraphBuilder();
 
   emitBaseNodes(ctx, graph);
 
-  buildLight(ctx, graph, speculationMode);
+  buildLight(ctx, graph);
 
   return graph.toGraph();
 }

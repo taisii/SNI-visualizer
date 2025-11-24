@@ -3,7 +3,8 @@ import { join, type LatticeValue } from "./lattice";
 // ns / spec の個別成分（4値）と、その関係を表す格子値を併せて保持する
 export type SecurityPoint = "Low" | "High" | "Bot" | "Top";
 
-export type SecurityLevel = "Low" | "High";
+// Policy が Top/Bot を許容するケースがあるため含めておく
+export type SecurityLevel = "Low" | "High" | "Top" | "Bot";
 
 export type RelValue = {
   ns: SecurityPoint;

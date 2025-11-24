@@ -211,15 +211,16 @@ export async function analyzeVCFG(
     const inState = ensureState(nodeId, modeKey);
     seedRegs(inState, usedRegs);
 
-    const currentWindowRemaining =
-      specWindowActive && executionMode === "Speculative"
-        ? (window ?? undefined)
-        : undefined;
-    const budgetExhausted =
-      specWindowActive &&
-      executionMode === "Speculative" &&
-      currentWindowRemaining !== undefined &&
-      currentWindowRemaining <= 0;
+    let currentWindowRemaining: number | undefined;
+    let nextWindowBase: number | null = window;
+    let budgetExhausted = false;
+
+    if (specWindowActive && executionMode === "Speculative") {
+      currentWindowRemaining = (window ?? specWindow) as number;
+      // specWindow は命令ステップごとに 1 減算する（エッジ種別に依存しない）
+      nextWindowBase = currentWindowRemaining - 1;
+      budgetExhausted = currentWindowRemaining <= 0;
+    }
 
     let outState: AbsState;
     try {
@@ -318,28 +319,25 @@ export async function analyzeVCFG(
       }
 
       let targetExecutionMode: ExecutionMode = executionMode;
-      let nextWindow: number | null = window;
+      let nextWindow: number | null = nextWindowBase;
       let nextLogStack: LogStack = logStack;
 
       if (e.type === "spec") {
         targetExecutionMode = "Speculative";
         const entering = targetNode?.specContext?.phase === "begin";
         if (entering) {
-          // ログ用スタックは「最新の spec-begin からの履歴」を保持し、ネスト時は置き換える
+          // spec-begin に入った時点でリソースを最大値にリセットし、ログ用スタックに push する
           nextLogStack = targetNode?.specContext?.id
-            ? [targetNode.specContext.id]
-            : [];
+            ? [...logStack, targetNode.specContext.id]
+            : logStack;
           nextWindow = specWindowActive ? specWindow : null;
         } else {
-          if (specWindowActive) {
-            const remaining = window ?? specWindow;
-            if (remaining <= 0) continue;
-            nextWindow = remaining - 1;
-          }
+          if (specWindowActive && nextWindow !== null && nextWindow < 0)
+            continue;
         }
       } else if (specWindowActive && targetExecutionMode === "Speculative") {
-        // NS エッジを辿る間は窓を減算しない（理論 4.1）
-        nextWindow = window;
+        // 投機モードで NS エッジを進む場合も命令ステップとして減算済みの nextWindowBase を引き継ぐ
+        if (nextWindow !== null && nextWindow < 0) continue;
       }
 
       if (

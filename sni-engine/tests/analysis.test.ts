@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { StaticGraph } from "@/lib/analysis-schema";
+import type { DisplayValue, StaticGraph } from "@/lib/analysis-schema";
 import { analyzeVCFG } from "../lib/analysis/analyze";
 import { buildVCFG } from "@/vcfg-builder";
 
@@ -84,8 +84,8 @@ describe("analyzeVCFG (pruning VCFG)", () => {
     const n1Step = res.trace.steps.find((s) => s.nodeId === "n1");
     expect(sbStep?.specWindowRemaining).toBe(2);
     expect(n1Step?.executionMode).toBe("Speculative");
-    // ns edgeは投機モードのまま進むが減算しない
-    expect(n1Step?.specWindowRemaining).toBe(2);
+    // ns edge でもステップ実行で減算される
+    expect(n1Step?.specWindowRemaining).toBe(1);
   });
 
   it("prunes speculative edge when window is exhausted", async () => {
@@ -322,7 +322,7 @@ describe("analyzeVCFG (pruning VCFG)", () => {
     expect(anySpec?.specWindowRemaining).toBeDefined();
   });
 
-  it("log stack is reset on nested spec-begin (no unbounded push)", async () => {
+  it("log stack pushes nested spec-begin contexts", async () => {
     // n0 -> sb1(spec-begin c1) -> sb2(spec-begin c2)
     const graph: StaticGraph = {
       nodes: [
@@ -332,16 +332,45 @@ describe("analyzeVCFG (pruning VCFG)", () => {
       ],
       edges: [edge("n0", "sb1", "spec"), edge("sb1", "sb2", "spec")],
     };
-    const res = await analyzeVCFG(graph, { specWindow: 2 });
-    const sb1Step = res.trace.steps.find((s) => s.nodeId === "sb1");
+    const res = await analyzeVCFG(graph, { specWindow: 3 });
     const sb2Step = res.trace.steps.find((s) => s.nodeId === "sb2");
-    expect(
-      sb1Step?.state.sections.find((s) => s.id === "specStack")?.data,
-    ).toEqual(expect.objectContaining({ d1: expect.any(Object) }));
-    // ネスト後は最新の spec-begin だけを保持
-    const stackSb2 =
-      sb2Step?.state.sections.find((s) => s.id === "specStack")?.data ?? {};
-    expect(Object.keys(stackSb2)).toHaveLength(1);
-    expect(Object.values(stackSb2)[0]?.label).toContain("c2");
+    const specStackSection = sb2Step?.state.sections.find(
+      (s) => s.id === "specStack",
+    );
+    const stackSb2: Record<string, DisplayValue> = specStackSection?.data ?? {};
+    expect(Object.keys(stackSb2)).toHaveLength(2);
+    const labels = Object.values(stackSb2).map((v) => v.label);
+    const joined = labels.join("|");
+    // originLabel が優先されるため ID そのものではなくラベルに含まれていることを確認
+    expect(joined).toMatch(/beqz x, L/);
+    expect(joined).toContain("c2");
+  });
+
+  it("prunes speculative path when specWindow is exhausted across ns edges", async () => {
+    // light モードでは spec-begin 以降の投機パスが ns エッジで張られるため、
+    // 命令ステップ単位での減算が効いているかを検証する。
+    const graph: StaticGraph = {
+      nodes: [
+        node("n0", 0, "ns", "beqz x, L"),
+        specBegin("sb", -1, "ctx"),
+        {
+          ...node("s1", 1, "spec", "load r secret"),
+          specContext: { id: "ctx", phase: "begin" },
+        },
+        node("s2", 2, "spec", "load r secret"),
+      ],
+      edges: [
+        edge("n0", "sb", "spec"),
+        edge("sb", "s1", "ns"), // 投機モードのまま ns エッジを進む
+        edge("s1", "s2", "ns"),
+      ],
+    };
+    const res = await analyzeVCFG(graph, {
+      specWindow: 1,
+      policy: { mem: { secret: "High" }, regs: { secret: "High", r: "Low" } },
+    });
+    const visited = res.trace.steps.map((s) => s.nodeId);
+    expect(visited).toContain("s1");
+    expect(visited).not.toContain("s2"); // w が 0 でプルーニング
   });
 });
