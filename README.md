@@ -20,10 +20,7 @@ MuASM プログラムに対する投機的非干渉 (SNI) を静的解析し、�
 
 ```bash
 bun install
-bun run dev      # http://localhost:3000
-# 本番
-bun run build
-bun start
+bun dev      # http://localhost:3000
 ```
 
 ### CLI で MuASM ケースを走らせる
