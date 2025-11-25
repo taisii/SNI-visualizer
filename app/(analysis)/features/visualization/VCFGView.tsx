@@ -14,6 +14,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import type { ReactNode } from "react";
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { ElkEdgeSection, ElkExtendedEdge } from "elkjs";
 import type { StaticGraph, TraceStep } from "@/lib/analysis-schema";
@@ -30,6 +31,8 @@ type Props = {
   graph: StaticGraph | null;
   activeNodeId: string | null;
   activeMode?: TraceStep["executionMode"];
+  title?: string;
+  actionSlot?: ReactNode;
 };
 
 const fitViewOptions: FitViewOptions<VisualizationNode> = {
@@ -129,7 +132,13 @@ function toEdges(graph: StaticGraph): VisualizationEdge[] {
   });
 }
 
-export function VCFGView({ graph, activeNodeId, activeMode }: Props) {
+export function VCFGView({
+  graph,
+  activeNodeId,
+  activeMode,
+  title = "VCFG",
+  actionSlot,
+}: Props) {
   const fallbackNodes = useMemo(() => (graph ? toNodes(graph) : []), [graph]);
   const fallbackEdges = useMemo(() => (graph ? toEdges(graph) : []), [graph]);
   const nodeById = useMemo(() => {
@@ -266,7 +275,8 @@ export function VCFGView({ graph, activeNodeId, activeMode }: Props) {
   return (
     <div className="flex h-full flex-col gap-2 rounded border border-neutral-200 bg-white p-3">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold text-neutral-800">VCFG</div>
+        <div className="text-sm font-semibold text-neutral-800">{title}</div>
+        {actionSlot ?? null}
       </div>
       <div className="flex-1 min-h-[420px] w-full rounded border border-neutral-100">
         <ReactFlow<VisualizationNode, VisualizationEdge>
