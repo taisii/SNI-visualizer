@@ -10,6 +10,10 @@ import { StateViewer } from "./features/visualization/StateViewer";
 import { VCFGView } from "./features/visualization/VCFGView";
 import { analyze } from "./features/analysis-runner/services/analyze";
 import { deriveControlState } from "./features/controls/control-state";
+import {
+  deriveDisplayGraph,
+  type GraphViewMode,
+} from "./features/visualization/deriveDisplayGraph";
 import type {
   AnalysisError,
   AnalysisResult,
@@ -35,6 +39,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [traceMode, setTraceMode] = useState<TraceMode>("single-path");
   const [specWindow, setSpecWindow] = useState(20);
+  const [graphView, setGraphView] = useState<GraphViewMode>("vcfg");
   const pendingBfsRetryRef = useRef(false);
   const lastWarningsToastRef = useRef<string | null>(null);
 
@@ -45,6 +50,10 @@ export default function Home() {
   const controlState = useMemo(
     () => deriveControlState(result, currentStep),
     [result, currentStep],
+  );
+  const displayGraph = useMemo(
+    () => deriveDisplayGraph(result?.graph ?? null, graphView),
+    [result?.graph, graphView],
   );
   const warnings = result?.warnings ?? null;
   const warningsSignature = useMemo(
@@ -207,6 +216,7 @@ export default function Home() {
     setAnalysisError(undefined);
     setCurrentStep(0);
     setIsAutoPlay(false);
+    setGraphView("vcfg");
     resetWarningsToast(lastWarningsToastRef);
   };
 
@@ -254,9 +264,38 @@ export default function Home() {
           </div>
           <div className="flex flex-1 flex-col gap-2">
             <VCFGView
-              graph={result?.graph ?? null}
+              graph={displayGraph}
               activeNodeId={activeStep?.nodeId ?? null}
               activeMode={activeStep?.executionMode}
+              title={graphView === "cfg" ? "CFG" : "VCFG"}
+              actionSlot={
+                <div className="inline-flex overflow-hidden rounded border border-neutral-200 bg-white text-xs font-medium text-neutral-700 shadow-sm">
+                  <button
+                    type="button"
+                    className={`px-2 py-1 transition ${
+                      graphView === "vcfg"
+                        ? "bg-neutral-900 text-white"
+                        : "hover:bg-neutral-100"
+                    }`}
+                    onClick={() => setGraphView("vcfg")}
+                    disabled={!result}
+                  >
+                    VCFG
+                  </button>
+                  <button
+                    type="button"
+                    className={`border-l border-neutral-200 px-2 py-1 transition ${
+                      graphView === "cfg"
+                        ? "bg-neutral-900 text-white"
+                        : "hover:bg-neutral-100"
+                    }`}
+                    onClick={() => setGraphView("cfg")}
+                    disabled={!result}
+                  >
+                    CFG
+                  </button>
+                </div>
+              }
             />
           </div>
         </section>
