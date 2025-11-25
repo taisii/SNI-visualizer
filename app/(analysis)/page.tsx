@@ -15,9 +15,14 @@ import type {
   AnalysisResult,
   TraceMode,
 } from "@/lib/analysis-schema";
-import type { SpeculationMode } from "@/sni-engine";
 
 const AUTO_PLAY_INTERVAL_MS = 800;
+
+// エラー発生時に積み上がったトーストをまとめて閉じるためのヘルパー。
+const resetWarningsToast = (ref: { current: string | null }) => {
+  toast.dismiss();
+  if (ref.current) ref.current = null;
+};
 
 export default function Home() {
   const [source, setSource] = useState<string>(createInitialSource);
@@ -29,14 +34,9 @@ export default function Home() {
   const [isAutoPlay, setIsAutoPlay] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [traceMode, setTraceMode] = useState<TraceMode>("single-path");
-  const [speculationMode, setSpeculationMode] =
-    useState<SpeculationMode>("stack-guard");
+  const [specWindow, setSpecWindow] = useState(20);
   const pendingBfsRetryRef = useRef(false);
   const lastWarningsToastRef = useRef<string | null>(null);
-
-  const resetWarningsToast = () => {
-    lastWarningsToastRef.current = null;
-  };
 
   const activeStep = useMemo(
     () => result?.trace.steps.at(currentStep) ?? null,
@@ -46,7 +46,6 @@ export default function Home() {
     () => deriveControlState(result, currentStep),
     [result, currentStep],
   );
-
   const warnings = result?.warnings ?? null;
   const warningsSignature = useMemo(
     () => (warnings ? JSON.stringify(warnings) : null),
@@ -70,6 +69,29 @@ export default function Home() {
     return () => clearInterval(id);
   }, [isAutoPlay, result]);
 
+  useEffect(() => {
+    if (!warnings || warnings.length === 0) {
+      lastWarningsToastRef.current = null;
+      return;
+    }
+    if (
+      warningsSignature &&
+      warningsSignature === lastWarningsToastRef.current
+    ) {
+      return;
+    }
+    lastWarningsToastRef.current = warningsSignature;
+    const topWarnings = warnings.filter((w) => w.type === "TopObserved");
+    if (topWarnings.length > 0) {
+      toast.warning("解析不能 (Top) を含む観測が検出されました", {
+        description:
+          "結果は不確定です。プログラムやポリシーを見直してください。",
+      });
+      return;
+    }
+    toast.warning("解析に警告があります");
+  }, [warnings, warningsSignature]);
+
   const formatAnalysisError = (error: AnalysisError) => {
     const detailRaw = error.detail;
     const detail =
@@ -86,14 +108,14 @@ export default function Home() {
   };
 
   const handleAnalyze = async (modeOverride?: TraceMode) => {
-    resetWarningsToast();
+    resetWarningsToast(lastWarningsToastRef);
     setIsLoading(true);
     setIsAutoPlay(false);
     try {
       const modeToUse = modeOverride ?? traceMode;
       const analysis = await analyze(source, {
         traceMode: modeToUse,
-        speculationMode,
+        specWindow,
       });
       if (analysis.error) {
         setAnalysisError(analysis.error);
@@ -113,7 +135,6 @@ export default function Home() {
           setCurrentStep(analysis.trace.steps.length - 1);
         } else {
           setResult(null);
-          resetWarningsToast();
         }
 
         toast.error(analysis.error.message ?? "解析でエラーが発生しました", {
@@ -156,7 +177,7 @@ export default function Home() {
         message,
       });
       setResult(null);
-      resetWarningsToast();
+      resetWarningsToast(lastWarningsToastRef);
     } finally {
       setIsLoading(false);
       pendingBfsRetryRef.current = false;
@@ -183,10 +204,10 @@ export default function Home() {
 
   const handleReset = () => {
     setResult(null);
-    resetWarningsToast();
     setAnalysisError(undefined);
     setCurrentStep(0);
     setIsAutoPlay(false);
+    resetWarningsToast(lastWarningsToastRef);
   };
 
   // 結果がないのに currentStep が進んでしまった場合のガード
@@ -198,44 +219,12 @@ export default function Home() {
     }
   }, [result, currentStep]);
 
-  useEffect(() => {
-    if (!warnings || warnings.length === 0) {
-      lastWarningsToastRef.current = null;
-      return;
-    }
-    if (warningsSignature && warningsSignature === lastWarningsToastRef.current) {
-      return;
-    }
-    lastWarningsToastRef.current = warningsSignature;
-
-    const depthWarnings = warnings.filter(
-      (warning) => warning.type === "MaxSpeculationDepth",
-    );
-    if (depthWarnings.length > 0) {
-      const contexts = depthWarnings
-        .map((w) => w.detail?.contextId)
-        .filter((id): id is string => Boolean(id));
-      const uniqueContexts = Array.from(new Set(contexts));
-      const contextLabel = uniqueContexts.slice(0, 3).join(", ");
-      const suffix = uniqueContexts.length > 3 ? " ほか" : "";
-      const depthValue = depthWarnings[0]?.detail?.maxSpeculationDepth;
-      toast.warning("投機ネスト上限に達しました", {
-        description: `maxSpeculationDepth=${depthValue ?? "?"} を超えたため、一部の spec-begin をスキップしています。${
-          contextLabel ? `影響コンテキスト: ${contextLabel}${suffix}` : ""
-        }`.trim(),
-      });
-      return;
-    }
-
-    toast.warning("解析に警告があります");
-  }, [warnings, warningsSignature]);
-
   return (
     <div className="flex min-h-screen flex-col bg-neutral-100 text-neutral-900">
       <Header
         result={result?.result ?? null}
         error={analysisError}
-        warnings={warnings ?? undefined}
+        warnings={result?.warnings}
       />
       <Toaster richColors position="bottom-right" />
       <main className="grid flex-1 grid-cols-1 gap-4 p-6 lg:grid-cols-2">
@@ -257,8 +246,10 @@ export default function Home() {
               onToggleAutoPlay={() => setIsAutoPlay((v) => !v)}
               traceMode={traceMode}
               onTraceModeChange={(mode) => setTraceMode(mode)}
-              speculationMode={speculationMode}
-              onSpeculationModeChange={(mode) => setSpeculationMode(mode)}
+              specWindow={specWindow}
+              onSpecWindowChange={(val) =>
+                setSpecWindow(Number.isFinite(val) && val > 0 ? val : 1)
+              }
             />
           </div>
           <div className="flex flex-1 flex-col gap-2">
@@ -267,7 +258,6 @@ export default function Home() {
               activeNodeId={activeStep?.nodeId ?? null}
               activeMode={activeStep?.executionMode}
             />
-
           </div>
         </section>
 

@@ -13,10 +13,9 @@ const badgeStyles = {
 
 export function Header({ result, error, warnings }: Props) {
   const hasWarnings = Boolean(warnings && warnings.length > 0);
-  const hasDepthWarning = Boolean(
-    warnings?.some((w) => w.type === "MaxSpeculationDepth"),
+  const hasTopWarning = Boolean(
+    warnings?.some((w) => w.type === "TopObserved"),
   );
-
   return (
     <header className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
       <div className="flex flex-col gap-1">
@@ -39,16 +38,16 @@ export function Header({ result, error, warnings }: Props) {
             </span>
             {hasWarnings && (
               <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
-                {hasDepthWarning ? "投機ネスト上限により一部探索停止" : "警告あり"}
+                {hasTopWarning ? "警告: Top を含む" : "警告あり"}
               </span>
             )}
           </div>
         ) : (
           <span className="text-sm text-neutral-500">未解析</span>
         )}
-        {hasDepthWarning && (
+        {hasTopWarning && (
           <p className="text-xs text-amber-700">
-            maxSpeculationDepth を超えたため、一部の spec-begin には入っていません。
+            解析不能 (Top) を含む観測があり、結果は不確定です。
           </p>
         )}
       </div>

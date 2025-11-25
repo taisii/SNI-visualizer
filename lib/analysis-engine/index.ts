@@ -7,15 +7,14 @@ import {
   type TraceMode,
 } from "@/lib/analysis-schema";
 
-type RunnerOptions = AnalyzeOptions & {
-  windowSize?: number;
-};
+type RunnerOptions = AnalyzeOptions;
 
 function buildErrorResult(
   type: AnalysisError["type"],
   message: string,
   detail: unknown,
   traceMode: TraceMode,
+  extras?: Partial<AnalysisResult>,
 ): AnalysisResult {
   return {
     schemaVersion: ANALYSIS_SCHEMA_VERSION,
@@ -28,6 +27,7 @@ function buildErrorResult(
       message,
       detail,
     },
+    ...extras,
   };
 }
 
@@ -40,14 +40,12 @@ export async function analyze(
   options: RunnerOptions = {},
 ): Promise<AnalysisResult> {
   const traceMode = options.traceMode ?? "single-path";
-  const speculationMode = options.speculationMode ?? "stack-guard";
   try {
-    const graph = buildVCFG(sourceCode, {
-      windowSize: options.windowSize,
-      speculationMode,
+    const graph = buildVCFG(sourceCode, {});
+    return await analyzeVCFG(graph, {
+      ...options,
+      traceMode,
     });
-    const { windowSize: _omitWin, ...engineOpts } = options;
-    return await analyzeVCFG(graph, { ...engineOpts, traceMode, speculationMode });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "解析で例外が発生しました";
@@ -56,6 +54,8 @@ export async function analyze(
         ? "ParseError"
         : "InternalError";
     // buildVCFG が投げる ParseError を UI 側に伝搬させるため error フィールドで返す
-    return buildErrorResult(type, message, err, traceMode);
+    return buildErrorResult(type, message, err, traceMode, {
+      specWindow: options.specWindow,
+    });
   }
 }

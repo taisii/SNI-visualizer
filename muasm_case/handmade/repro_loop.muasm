@@ -1,0 +1,7 @@
+    w <- 0
+Loop:
+    load r_val,r_ptr
+    beqz y,Label
+    r_ptr <- r_ptr + 1
+Label:
+    jmp Loop

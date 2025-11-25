@@ -17,8 +17,10 @@ export type AnalysisResult = {
   result: "Secure" | "SNI_Violation";
   /** 解析エラー情報（UI は message をユーザー向けに表示） */
   error?: AnalysisError;
-  /** エラーではないが UI で伝えたい注意事項 */
+  /** 解析を継続できたが不確定要素がある場合の警告群 */
   warnings?: AnalysisWarning[];
+  /** 投機ウィンドウ長 (light モード時のみ有効) */
+  specWindow?: number;
 };
 
 export type AnalysisError = {
@@ -28,13 +30,11 @@ export type AnalysisError = {
 };
 
 export type AnalysisWarning = {
-  type: "MaxSpeculationDepth";
+  type: "TopObserved";
   message: string;
   detail?: {
-    contextId?: string;
     nodeId?: string;
-    maxSpeculationDepth?: number;
-    stackDepth?: number;
+    edge?: { source: string; target: string };
   };
 };
 
@@ -66,7 +66,7 @@ export type GraphNode = {
 export type GraphEdge = {
   source: string;
   target: string;
-  type: "ns" | "spec" | "rollback";
+  type: "ns" | "spec";
   label?: string;
 };
 
@@ -81,6 +81,8 @@ export type TraceStep = {
   nodeId: string;
   description: string;
   executionMode: "NS" | "Speculative";
+  /** 投機モード時に残っている specWindow (light 専用) */
+  specWindowRemaining?: number;
   state: AbstractState;
   isViolation: boolean;
 };

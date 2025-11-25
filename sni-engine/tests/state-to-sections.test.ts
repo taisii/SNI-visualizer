@@ -5,12 +5,13 @@ import type { AbsState } from "../lib/core/state";
 function makeState(): AbsState {
   return {
     regs: new Map([
-      ["r", { ns: "Low", sp: "High" }],
-      ["b", { ns: "Bot", sp: "Low" }],
+      ["r", { ns: "Low", sp: "High", rel: "Leak" }],
+      ["b", { ns: "Bot", sp: "Low", rel: "Top" }],
     ]),
     mem: new Map(),
     obsMem: new Map(),
     obsCtrl: new Map(),
+    budget: "inf",
   };
 }
 
@@ -29,7 +30,9 @@ describe("stateToSections", () => {
 
   it("adds specStack section when stack is given", () => {
     const stack = ["specA", "specB"];
-    const sections = stateToSections(makeState(), { specStack: stack }).sections;
+    const sections = stateToSections(makeState(), {
+      specStack: stack,
+    }).sections;
     const specSection = sections.find((s) => s.id === "specStack");
     expect(specSection).toBeDefined();
     expect(specSection?.data.d2.label).toBe("specA");
@@ -75,5 +78,20 @@ describe("stateToSections", () => {
     expect(specSection?.data.d2.description).toBe("仮定: x == 0");
     expect(specSection?.data.d1.label).toBe("bnez y, L2");
     expect(specSection?.data.d1.description).toBe("仮定: y != 0");
+  });
+
+  it("omits budget section for non-speculative (infinite) budget", () => {
+    const sections = stateToSections(makeState()).sections;
+    const budgetSection = sections.find((s) => s.id === "specBudget");
+    expect(budgetSection).toBeUndefined();
+  });
+
+  it("shows budget section when budget is finite", () => {
+    const finite = makeState();
+    finite.budget = 3;
+    const sections = stateToSections(finite).sections;
+    const budgetSection = sections.find((s) => s.id === "specBudget");
+    expect(budgetSection).toBeDefined();
+    expect(budgetSection?.data.w.label).toBe("3");
   });
 });

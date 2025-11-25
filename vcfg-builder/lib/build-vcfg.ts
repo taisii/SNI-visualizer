@@ -5,13 +5,14 @@ import type { BuildOptions } from "../types";
 import { normalizeOptions } from "./options";
 import { createProgramContext } from "./program-context";
 import { GraphBuilder } from "./graph-builder";
-import { buildMeta } from "./modes/meta";
+import { buildLight } from "./modes/light";
 
 export type { BuildOptions } from "../types";
+export type { BuildMode } from "../types";
 
 export function buildVCFG(
   sourceCode: string,
-  options: BuildOptions = 20,
+  options: BuildOptions = {},
 ): StaticGraph {
   const program = parse(sourceCode);
   return buildVCFGFromProgram(program, options);
@@ -19,15 +20,15 @@ export function buildVCFG(
 
 export function buildVCFGFromProgram(
   program: Program,
-  options: BuildOptions = 20,
+  options: BuildOptions = {},
 ): StaticGraph {
-  const { windowSize, speculationMode } = normalizeOptions(options);
+  normalizeOptions(options);
   const ctx = createProgramContext(program);
   const graph = new GraphBuilder();
 
   emitBaseNodes(ctx, graph);
 
-  buildMeta(ctx, graph, windowSize, speculationMode);
+  buildLight(ctx, graph);
 
   return graph.toGraph();
 }

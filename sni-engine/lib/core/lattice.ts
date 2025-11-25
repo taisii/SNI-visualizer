@@ -3,17 +3,17 @@ import type { DisplayValue } from "@/lib/analysis-schema";
 export type LatticeValue =
   | "Bot"
   | "EqLow"
-  | "EqHigh"
   | "Diverge"
+  | "EqHigh"
   | "Leak"
   | "Top";
 
-// 上からの安全順序を表現する配列（インデックスが高さに対応）
+// 表示や列挙のための固定順序（安全順の全順序ではない点に注意）
 const ORDER: LatticeValue[] = [
   "Bot",
   "EqLow",
-  "EqHigh",
   "Diverge",
+  "EqHigh",
   "Leak",
   "Top",
 ];
@@ -23,40 +23,40 @@ const JOIN_TABLE: Record<LatticeValue, Record<LatticeValue, LatticeValue>> = {
   Bot: {
     Bot: "Bot",
     EqLow: "EqLow",
-    EqHigh: "EqHigh",
     Diverge: "Diverge",
+    EqHigh: "EqHigh",
     Leak: "Leak",
     Top: "Top",
   },
   EqLow: {
     Bot: "EqLow",
     EqLow: "EqLow",
-    EqHigh: "EqHigh",
     Diverge: "Diverge",
+    EqHigh: "EqHigh",
+    Leak: "Leak",
+    Top: "Top",
+  },
+  Diverge: {
+    Bot: "Diverge",
+    EqLow: "Diverge",
+    Diverge: "Diverge",
+    EqHigh: "EqHigh",
     Leak: "Leak",
     Top: "Top",
   },
   EqHigh: {
     Bot: "EqHigh",
     EqLow: "EqHigh",
+    Diverge: "EqHigh",
     EqHigh: "EqHigh",
-    Diverge: "Top",
-    Leak: "Top",
-    Top: "Top",
-  },
-  Diverge: {
-    Bot: "Diverge",
-    EqLow: "Diverge",
-    EqHigh: "Top",
-    Diverge: "Diverge",
-    Leak: "Top",
+    Leak: "Leak",
     Top: "Top",
   },
   Leak: {
     Bot: "Leak",
     EqLow: "Leak",
-    EqHigh: "Top",
-    Diverge: "Top",
+    Diverge: "Leak",
+    EqHigh: "Leak",
     Leak: "Leak",
     Top: "Top",
   },

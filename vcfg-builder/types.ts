@@ -1,11 +1,11 @@
-export type BuildOptions =
-  | number
-  | {
-      windowSize?: number;
-      speculationMode?: "discard" | "stack-guard";
-    };
+export type BuildMode = "light";
+
+export type BuildOptions = {
+  speculationMode?: "discard";
+  mode?: BuildMode;
+};
 
 export type NormalizedOptions = {
-  windowSize: number;
-  speculationMode: "discard" | "stack-guard";
+  mode: BuildMode;
+  speculationMode: "discard";
 };

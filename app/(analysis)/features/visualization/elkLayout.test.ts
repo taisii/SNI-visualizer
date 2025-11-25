@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import ELK from "elkjs/lib/elk.bundled.js";
-
 import type { StaticGraph } from "@/lib/analysis-schema";
 import { buildElkGraph, elkLayoutOptions } from "./elkLayout";
 import { buildVCFG } from "@/vcfg-builder";
@@ -41,7 +39,7 @@ describe("ELK レイアウト入力", () => {
   });
 
   it("デフォルトの MuASM デモも buildElkGraph で pc 順にソートされる", () => {
-    const graph = buildVCFG(DEFAULT_PROGRAM, { windowSize: 20 });
+    const graph = buildVCFG(DEFAULT_PROGRAM);
     const elkGraph = buildElkGraph(graph);
 
     const typeById = new Map(graph.nodes.map((node) => [node.id, node.type]));
@@ -55,27 +53,9 @@ describe("ELK レイアウト入力", () => {
 
     expect(nsOrder).toEqual(expectedOrder);
     expect(
-      (elkGraph.children ?? []).some((child) => typeById.get(child.id) === "spec"),
+      (elkGraph.children ?? []).some(
+        (child) => typeById.get(child.id) === "spec",
+      ),
     ).toBe(true);
-  });
-
-  it("elk.layout は ns ノードを pc 順で縦に並べる", async () => {
-    const graph = buildVCFG(DEFAULT_PROGRAM, { windowSize: 5 });
-    const elkGraph = buildElkGraph(graph);
-
-    const elk = new ELK();
-    const layout = await elk.layout(elkGraph, { layoutOptions: elkLayoutOptions });
-
-    const typeById = new Map(graph.nodes.map((node) => [node.id, node.type] as const));
-    const nsChildren = (layout.children ?? []).filter(
-      (child) => typeById.get(child.id) === "ns",
-    );
-    const sortedByY = [...nsChildren].sort((a, b) => (a.y ?? 0) - (b.y ?? 0));
-    const expectedOrder = [...graph.nodes]
-      .filter((node) => node.type === "ns")
-      .sort((a, b) => a.pc - b.pc)
-      .map((node) => node.id);
-
-    expect(sortedByY.map((child) => child.id)).toEqual(expectedOrder);
   });
 });

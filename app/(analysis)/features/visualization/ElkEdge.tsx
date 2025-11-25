@@ -36,7 +36,8 @@ export function ElkEdge(props: ElkEdgeProps) {
 
   const path = buildPathFromSections(data?.sections) ?? fallbackPath;
   const labelPoint =
-    getLabelPointFromSections(data?.sections) ?? ({ x: labelX, y: labelY } as const);
+    getLabelPointFromSections(data?.sections) ??
+    ({ x: labelX, y: labelY } as const);
 
   return (
     <>
@@ -136,6 +137,9 @@ function flattenSectionPoints(sections?: ElkEdgeSection[]) {
   return flattened;
 }
 
-function segmentLength(a: { x: number; y: number }, b: { x: number; y: number }) {
+function segmentLength(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }

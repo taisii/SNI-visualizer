@@ -7,40 +7,40 @@ const expected = {
   Bot: {
     Bot: "Bot",
     EqLow: "EqLow",
-    EqHigh: "EqHigh",
     Diverge: "Diverge",
+    EqHigh: "EqHigh",
     Leak: "Leak",
     Top: "Top",
   },
   EqLow: {
     Bot: "EqLow",
     EqLow: "EqLow",
-    EqHigh: "EqHigh",
     Diverge: "Diverge",
+    EqHigh: "EqHigh",
+    Leak: "Leak",
+    Top: "Top",
+  },
+  Diverge: {
+    Bot: "Diverge",
+    EqLow: "Diverge",
+    Diverge: "Diverge",
+    EqHigh: "EqHigh",
     Leak: "Leak",
     Top: "Top",
   },
   EqHigh: {
     Bot: "EqHigh",
     EqLow: "EqHigh",
+    Diverge: "EqHigh",
     EqHigh: "EqHigh",
-    Diverge: "Top",
-    Leak: "Top",
-    Top: "Top",
-  },
-  Diverge: {
-    Bot: "Diverge",
-    EqLow: "Diverge",
-    EqHigh: "Top",
-    Diverge: "Diverge",
-    Leak: "Top",
+    Leak: "Leak",
     Top: "Top",
   },
   Leak: {
     Bot: "Leak",
     EqLow: "Leak",
-    EqHigh: "Top",
-    Diverge: "Top",
+    Diverge: "Leak",
+    EqHigh: "Leak",
     Leak: "Leak",
     Top: "Top",
   },
@@ -70,5 +70,10 @@ describe("toDisplay", () => {
   });
   it("maps Leak to danger", () => {
     expect(toDisplay("Leak").style).toBe("danger");
+  });
+
+  it("treats Top as absorbing when joined with Leak", () => {
+    expect(join("Top", "Leak")).toBe("Top");
+    expect(join("Leak", "Top")).toBe("Top");
   });
 });

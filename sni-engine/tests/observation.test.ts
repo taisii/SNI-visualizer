@@ -24,4 +24,33 @@ describe("observation updates", () => {
     expect(st.obsCtrl.get("c1")).toBe("Leak");
     expect(stateHasViolation(st)).toBe(true);
   });
+
+  it("Top in observations is warning-only (no violation)", () => {
+    const st = bottomState();
+    st.obsMem.set("mX", "Top");
+    expect(stateHasViolation(st)).toBe(false);
+  });
+
+  it("Top observed in Spec does not escalate to Leak", () => {
+    const st = bottomState();
+    updateMemObsNS(st, "m1", "EqLow"); // ベースライン Low
+    updateMemObsSpec(st, "m1", "Top"); // Spec 側で Top を観測
+    expect(st.obsMem.get("m1")).toBe("Top");
+    expect(stateHasViolation(st)).toBe(false);
+  });
+
+  it("NS で Leak を観測してもベースラインは EqHigh までで違反しない", () => {
+    const st = bottomState();
+    updateMemObsNS(st, "m2", "Leak"); // High 相当だが NS 側
+    expect(st.obsMem.get("m2")).toBe("EqHigh");
+    expect(stateHasViolation(st)).toBe(false);
+  });
+
+  it("Spec 観測でベースライン Top の場合は Top のまま", () => {
+    const st = bottomState();
+    st.obsMem.set("m3", "Top"); // 解析不能だが非違反
+    updateMemObsSpec(st, "m3", "EqHigh");
+    expect(st.obsMem.get("m3")).toBe("Top");
+    expect(stateHasViolation(st)).toBe(false);
+  });
 });

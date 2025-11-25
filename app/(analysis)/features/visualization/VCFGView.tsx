@@ -42,7 +42,10 @@ const nodeColors = {
   spec: "#f59e0b", // amber
 } as const;
 
-const activeColors: Record<TraceStep["executionMode"], { border: string; bg: string; shadow: string }> = {
+const activeColors: Record<
+  TraceStep["executionMode"],
+  { border: string; bg: string; shadow: string }
+> = {
   NS: {
     border: "#60a5fa", // blue-400
     bg: "#dbeafe", // blue-100
@@ -58,7 +61,6 @@ const activeColors: Record<TraceStep["executionMode"], { border: string; bg: str
 const edgeColors = {
   ns: "#94a3b8",
   spec: "#f59e0b",
-  rollback: "#ef4444",
 } as const;
 
 type VisualizationNode = Node<{
@@ -117,7 +119,7 @@ function toEdges(graph: StaticGraph): VisualizationEdge[] {
       id: createEdgeId(edge, idx),
       source: edge.source,
       target: edge.target,
-      label: edge.type === "rollback" ? "rollback" : (edge.label ?? edge.type),
+      label: edge.label ?? edge.type,
       style: { stroke: color, strokeWidth: 2 },
       labelStyle: { fill: color, fontSize: 11, fontWeight: 600 },
       animated: edge.type === "spec",
@@ -135,18 +137,27 @@ export function VCFGView({ graph, activeNodeId, activeMode }: Props) {
     return new Map(graph.nodes.map((node) => [node.id, node]));
   }, [graph]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<VisualizationNode>(fallbackNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<VisualizationEdge>(fallbackEdges);
-  const rfRef = useRef<ReactFlowInstance<VisualizationNode, VisualizationEdge> | null>(null);
+  const [nodes, setNodes, onNodesChange] =
+    useNodesState<VisualizationNode>(fallbackNodes);
+  const [edges, setEdges, onEdgesChange] =
+    useEdgesState<VisualizationEdge>(fallbackEdges);
+  const rfRef = useRef<ReactFlowInstance<
+    VisualizationNode,
+    VisualizationEdge
+  > | null>(null);
   const activeNodeRef = useRef<string | null>(activeNodeId ?? null);
-  const activeModeRef = useRef<TraceStep["executionMode"] | null>(activeMode ?? null);
+  const activeModeRef = useRef<TraceStep["executionMode"] | null>(
+    activeMode ?? null,
+  );
   const edgeTypes = useMemo(() => ({ elk: ElkEdge }), []);
   const elk = useMemo(() => new ELK(), []);
 
   useEffect(() => {
     activeNodeRef.current = activeNodeId;
     if (!graph) return;
-    setNodes((prev) => applyActiveStyles(prev, activeNodeId, activeModeRef.current ?? undefined));
+    setNodes((prev) =>
+      applyActiveStyles(prev, activeNodeId, activeModeRef.current ?? undefined),
+    );
   }, [activeNodeId, graph, setNodes]);
 
   useEffect(() => {
@@ -205,7 +216,7 @@ export function VCFGView({ graph, activeNodeId, activeMode }: Props) {
               original?.type ?? "ns",
               child.id === activeNodeRef.current,
               child.id === activeNodeRef.current
-                ? activeModeRef.current ?? undefined
+                ? (activeModeRef.current ?? undefined)
                 : undefined,
             ),
           } satisfies VisualizationNode;
@@ -236,10 +247,13 @@ export function VCFGView({ graph, activeNodeId, activeMode }: Props) {
     };
   }, [elk]);
 
-  const handleInit = useCallback((instance: ReactFlowInstance<VisualizationNode, VisualizationEdge>) => {
-    rfRef.current = instance;
-    instance.fitView(fitViewOptions);
-  }, []);
+  const handleInit = useCallback(
+    (instance: ReactFlowInstance<VisualizationNode, VisualizationEdge>) => {
+      rfRef.current = instance;
+      instance.fitView(fitViewOptions);
+    },
+    [],
+  );
 
   if (!graph) {
     return (

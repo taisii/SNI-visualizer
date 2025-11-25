@@ -1,7 +1,7 @@
 # SNI-engine 拡張計画: 現行仕様からの拡張ロードマップ
 
 - 作成日: 2025-11-17  
-- 最終更新: 2025-11-21 (投機スタックキーの爆発リスクを追記)  
+- 最終更新: 2025-11-24（stack-key 依存を解消済みの現状を反映）  
 - 対象: SNI 解析コア実装担当 (担当 C)  
 - 関連: `spec.md`
 
@@ -87,8 +87,8 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
 ### 5.1 一致しているポイント（大枠）
 
 - **VCFG 構造**  
-  - `vcfg-builder/lib/modes/meta.ts` では NS ノードを共有し、投機区間を示す `spec-begin/spec-end` メタノードだけを `type:"spec"` で追加する。いずれも `type:"rollback"` エッジで復帰を表す。  
-  - `beqz` / `bnez` は通過条件をラベルに持つ 2 本の NS エッジを張り、分岐ごとに Always-mispredict で両方向の投機を展開する（meta 構造を共通で使用）。
+  - （2025-11 時点の実装では `meta` モードを廃止し、`vcfg-builder/lib/modes/meta.ts` も削除済み。以下は旧実装の記録。）  
+    `beqz` / `bnez` は通過条件をラベルに持つ 2 本の NS エッジを張り、分岐ごとに Always-mispredict で両方向の投機を展開する（meta 構造を共通で使用）。
 
 - **抽象状態 Σ# = (R#, Γ#, O#, J#)**  
   - `AbsState`（`sni-engine/src/state.ts`）が `regs`, `mem`, `obsMem`, `obsCtrl` の 4 成分を持ち、  
@@ -107,10 +107,10 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
     `updateCtrlObsNS` / `updateCtrlObsSpec` が MEMLEAK と同じパターンで CTRLLEAK を検出する。  
   - `stateHasViolation` は O#/J# に Leak/Top が現れたかだけを見るため、違反判定ロジックも理論と対応している。
 
-- **不動点計算とロールバック**  
+- **不動点計算と Pruning-VCFG**  
   - `analyzeVCFG` は (nodeId, Mode) ごとの `AbsState` を保持するワークリスト型のモノトーンフレームワーク。  
-  - `rollback` エッジでは regs/mem を捨て、obsMem/obsCtrl のみを別状態にコピーしてマージする実装になっており、  
-    「ロールバック後も観測履歴は残る」という投機実行モデルと整合している。
+  - VCFG は `ns/spec` エッジのみで rollback エッジを生成せず、投機ウィンドウが尽きた spec エッジは探索を打ち切る（Prune）。  
+    観測履歴は同一路上で継続する。
 
 ### 5.2 理論仕様からの主な簡略化・ギャップ
 
@@ -126,8 +126,8 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
 
 - **仮想ノード (vn_start/vn_stop) の表現方法**  
   - 理論ノートが想定する明示的な仮想ノード（投機開始/終了ノード）は導入していない。  
-  - 代わりに、`type:"spec"` のノード複製と `type:"rollback"` エッジで同等のセマンティクスを表現している。  
-  - 表現は異なるが、NS/SP の構造的分離とロールバック挙動という本質的要件は満たしている。
+  - 代わりに、`type:"spec"` のノード複製のみで投機区間を表現し、rollback エッジは生成しない。  
+  - NS/SP の分離と投機ウィンドウによる探索打ち切りという現実装の要件に合わせている。
 
 - **完全なハイパープロパティとしての SNI**  
   - 理論ノートは 2-ハイパープロパティとしての完全な SNI（トレース同値など）を視野に入れているが、  
@@ -154,8 +154,6 @@ NS と Spec の観測を比較して MEMLEAK / CTRLLEAK の両方を検出でき
   - 対応: (A) PC 単位に粗くする、(B) 現行粒度を維持しつつ意図をドキュメント化、のいずれかを決定し、選択理由とテストを追加。
 
 - **VCFG の spec/rollback 構造チェック**  
-  - 現状: 入力グラフに投機開始ノードや rollback エッジが欠落しても検知しない。  
-  - 対応: `parseGraph` または `analyzeVCFG` で必須構造（spec ノード存在、rollback 経路存在）を検証し、欠落時は警告またはエラーとするバリデーションを追加。設計選択を `spec.md` に追記。
-- **投機スタックキーの爆発リスク**  
-  - 現状: `analyzeVCFG` はモードキーを `"Speculative|ctxA::ctxB::..."` の全長連結で保持し、k-limiting やハッシュ縮約を行っていない（参照: `sni-engine/lib/analysis/analyze.ts:112-116,309-335`）。深いネストや多量の分岐で状態数が急増しうる。  
-  - 対応案: (A) スタック長のみをキーにする近似、(B) 先頭/末尾 k 個を保持する k-limiting、(C) ハッシュしたキーに衝突検出を組み合わせる、のいずれかを選定。まず (A) を実験実装し、精度/性能の劣化を `vitest` 追加ケースとベンチで評価する。
+  - 現状: 入力グラフに投機開始ノードが欠落しても検知しない。  
+  - 対応: `parseGraph` または `analyzeVCFG` で必須構造（spec ノード存在）を検証し、欠落時は警告またはエラーとするバリデーションを追加。設計選択を `spec.md` に追記。
+-

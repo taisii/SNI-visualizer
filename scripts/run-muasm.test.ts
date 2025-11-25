@@ -10,16 +10,13 @@ import { promises as fs } from "node:fs";
 import { parseArgs, runSingleCase } from "./run-muasm";
 
 describe("run-muasm CLI options", () => {
-  beforeEach(() => {
-  });
+  beforeEach(() => {});
 
-  afterEach(() => {
-  });
+  afterEach(() => {});
 
-  it("defaults to bfs / stack-guard", () => {
+  it("defaults to bfs", () => {
     const parsed = parseArgs([]);
     expect(parsed.options.traceMode).toBe("bfs");
-    expect(parsed.options.speculationMode).toBe("stack-guard");
   });
 
   it("accepts dfs alias (single-path)", () => {
@@ -27,12 +24,13 @@ describe("run-muasm CLI options", () => {
     expect(parsed.options.traceMode).toBe("single-path");
   });
 
-  it("accepts stack-guard spec mode", () => {
-    const parsed = parseArgs(["--spec-mode", "stack-guard"]);
-    expect(parsed.options.speculationMode).toBe("stack-guard");
+  it("rejects non-positive spec-window", () => {
+    expect(() => parseArgs(["--spec-window", "0"])).toThrow(
+      /spec-window は正の整数/,
+    );
   });
 
-  it("passes modes to analyze()", async () => {
+  it("passes options to analyze()", async () => {
     // create temp muasm file
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "muasm-"));
     const file = path.join(dir, "case.muasm");
@@ -57,7 +55,7 @@ describe("run-muasm CLI options", () => {
       file,
       {
         traceMode: "single-path",
-        speculationMode: "discard",
+        specWindow: 5,
       },
       analyzeStub,
     );
@@ -67,8 +65,7 @@ describe("run-muasm CLI options", () => {
       source: "skip\n",
       opts: {
         traceMode: "single-path",
-        speculationMode: "discard",
-        windowSize: undefined,
+        specWindow: 5,
       },
     });
   });

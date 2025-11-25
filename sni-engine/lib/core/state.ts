@@ -1,11 +1,19 @@
 import { join, type LatticeValue } from "./lattice";
 
-// ns / spec の個別成分は Leak/Diverge を取り得ない 4 値に限定する
+// ns / spec の個別成分（4値）と、その関係を表す格子値を併せて保持する
 export type SecurityPoint = "Low" | "High" | "Bot" | "Top";
 
-export type SecurityLevel = "Low" | "High";
+// Policy が Top/Bot を許容するケースがあるため含めておく
+export type SecurityLevel = "Low" | "High" | "Top" | "Bot";
 
-export type RelValue = { ns: SecurityPoint; sp: SecurityPoint };
+export type RelValue = {
+  ns: SecurityPoint;
+  sp: SecurityPoint;
+  rel: LatticeValue;
+};
+
+// 投機リソースカウンタ w#: 非投機は "inf"、投機中は残りステップ数（0 以上）
+export type SpecBudget = number | "inf";
 
 export type InitPolicy = {
   regs?: Record<string, SecurityLevel>;
@@ -19,6 +27,8 @@ export type AbsState = {
   obsMem: Map<string, LatticeValue>;
   // 分岐やジャンプに関する観測履歴 (CTRLLEAK 用)
   obsCtrl: Map<string, LatticeValue>;
+  // 投機リソースカウンタ（モード依存で解釈）
+  budget: SpecBudget;
 };
 
 export function bottomState(): AbsState {
@@ -27,6 +37,7 @@ export function bottomState(): AbsState {
     mem: new Map(),
     obsMem: new Map(),
     obsCtrl: new Map(),
+    budget: "inf",
   };
 }
 
@@ -36,6 +47,7 @@ export function cloneState(src: AbsState): AbsState {
     mem: new Map(src.mem),
     obsMem: new Map(src.obsMem),
     obsCtrl: new Map(src.obsCtrl),
+    budget: src.budget,
   };
 }
 
@@ -60,23 +72,33 @@ export function initState(
 
   if (policy?.regs) {
     for (const [k, lvl] of Object.entries(policy.regs)) {
-      regs.set(
-        k,
-        lvl === "Low" ? defaultRegRel() : { ns: "High", sp: "High" },
-      );
+      if (lvl === "Low") {
+        regs.set(k, defaultRegRel());
+      } else if (lvl === "High") {
+        regs.set(k, makeRel("High", "High"));
+      } else if (lvl === "Top") {
+        regs.set(k, makeRel("Top", "Top"));
+      } else {
+        regs.set(k, makeRel("Bot", "Bot"));
+      }
     }
   }
 
   if (policy?.mem) {
     for (const [k, lvl] of Object.entries(policy.mem)) {
-      mem.set(
-        k,
-        lvl === "Low" ? defaultMemRel() : { ns: "High", sp: "High" },
-      );
+      if (lvl === "Low") {
+        mem.set(k, defaultMemRel());
+      } else if (lvl === "High") {
+        mem.set(k, makeRel("High", "High"));
+      } else if (lvl === "Top") {
+        mem.set(k, makeRel("Top", "Top"));
+      } else {
+        mem.set(k, makeRel("Bot", "Bot"));
+      }
     }
   }
 
-  return { regs, mem, obsMem, obsCtrl };
+  return { regs, mem, obsMem, obsCtrl, budget: "inf" };
 }
 
 /**
@@ -88,11 +110,11 @@ export function defaultLattice(): LatticeValue {
 }
 
 export function defaultRegRel(): RelValue {
-  return { ns: "Low", sp: "Low" };
+  return makeRel("Low", "Low");
 }
 
 export function defaultMemRel(): RelValue {
-  return { ns: "High", sp: "High" };
+  return makeRel("High", "High");
 }
 
 // --- SecurityPoint と LatticeValue の橋渡し ---
@@ -125,10 +147,43 @@ export function latticeToSecurity(v: LatticeValue): SecurityPoint {
   }
 }
 
-export function joinSecurity(a: SecurityPoint, b: SecurityPoint): SecurityPoint {
+export function joinSecurity(
+  a: SecurityPoint,
+  b: SecurityPoint,
+): SecurityPoint {
   return latticeToSecurity(join(securityToLattice(a), securityToLattice(b)));
 }
 
 export function isHighLike(v: SecurityPoint): boolean {
   return v === "High" || v === "Top";
+}
+
+// --- Speculative budget helpers ---
+export function joinBudget(a: SpecBudget, b: SpecBudget): SpecBudget {
+  // 到達可能な残量の上限を保持する（探索を取りこぼさない）
+  if (a === "inf" || b === "inf") return "inf";
+  return Math.max(a, b);
+}
+
+export function decrementBudget(b: SpecBudget): SpecBudget {
+  if (b === "inf") return "inf";
+  return b - 1;
+}
+
+// --- RelValue 補助 ---
+export function deriveRelation(
+  ns: SecurityPoint,
+  sp: SecurityPoint,
+): LatticeValue {
+  if (ns === "Bot" || sp === "Bot") return "Bot";
+  if (ns === "Top" || sp === "Top") return "Top";
+  if (ns === "High" && sp === "High") return "EqHigh";
+  if (ns === "Low" && sp === "Low") return "EqLow";
+  if ((ns === "Low" && sp === "High") || (ns === "High" && sp === "Low"))
+    return "Leak";
+  return "Top";
+}
+
+export function makeRel(ns: SecurityPoint, sp: SecurityPoint): RelValue {
+  return { ns, sp, rel: deriveRelation(ns, sp) };
 }

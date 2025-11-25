@@ -9,16 +9,13 @@ import type {
   TraceStep,
   AnalysisError,
 } from "../lib/analysis-schema";
-import type { SpeculationMode } from "../sni-engine/lib/analysis/analyze";
 
 const DEFAULT_TRACE_MODE: TraceMode = "bfs";
 const DEFAULT_TARGET = "muasm_case";
-const DEFAULT_SPEC_MODE: SpeculationMode = "stack-guard";
 
 type CliOptions = {
   traceMode: TraceMode;
-  speculationMode: SpeculationMode;
-  windowSize?: number;
+  specWindow?: number;
 };
 
 type ParsedArgs = {
@@ -62,7 +59,6 @@ async function main() {
 function parseArgs(argv: string[]): ParsedArgs {
   const options: CliOptions = {
     traceMode: DEFAULT_TRACE_MODE,
-    speculationMode: DEFAULT_SPEC_MODE,
   };
   const targets: string[] = [];
 
@@ -95,23 +91,13 @@ function parseArgs(argv: string[]): ParsedArgs {
           `--trace-mode は 'bfs' | 'single-path' | 'dfs'(エイリアス) を指定してください (got: ${value ?? ""})`,
         );
       }
-      case "--spec-mode": {
-        const value = maybeValue ?? argv[++i];
-        if (value === "discard" || value === "stack-guard") {
-          options.speculationMode = value;
-          break;
-        }
-        throw new Error(
-          `--spec-mode は 'discard' | 'stack-guard' を指定してください (got: ${value ?? ""})`,
-        );
-      }
-      case "--window-size": {
+      case "--spec-window": {
         const value = maybeValue ?? argv[++i];
         const parsed = Number.parseInt(value ?? "", 10);
         if (!Number.isFinite(parsed) || parsed <= 0) {
-          throw new Error("--window-size は正の整数で指定してください");
+          throw new Error("--spec-window は正の整数で指定してください");
         }
-        options.windowSize = parsed;
+        options.specWindow = parsed;
         break;
       }
       case "--help": {
@@ -133,9 +119,7 @@ Usage: bun run scripts/run-muasm.ts [options] [file|dir ...]
 
 Options:
   --trace-mode <bfs|single-path|dfs>  解析の探索戦略 (default: bfs)。dfs は single-path のエイリアス。
-  --spec-mode <discard|stack-guard>
-                                   投機モード (default: stack-guard)
-  --window-size <n>                投機ウィンドウの大きさ (default: VCFG builder デフォルト)
+  --spec-window <n>                light モード時の投機長 (default: 20)
   --help                           このヘルプを表示
 
 引数を省略すると muasm_case/ 以下の全 .muasm を実行します。`);
@@ -193,14 +177,14 @@ async function runSingleCase(
   try {
     const result = await analyzeFn(source, {
       traceMode: options.traceMode,
-      speculationMode: options.speculationMode,
-      windowSize: options.windowSize,
+      specWindow: options.specWindow,
     });
     printAnalysisResult(
       result.trace.steps ?? [],
       result.result,
       result.traceMode,
       result.error,
+      result.warnings,
     );
     // エラーが含まれている場合は失敗扱いにする
     if (result.error) {
@@ -218,6 +202,7 @@ function printAnalysisResult(
   outcome: string,
   traceMode: TraceMode,
   error?: AnalysisError,
+  warnings?: AnalysisResult["warnings"],
 ) {
   console.log(`result     : ${outcome}`);
   console.log(`trace mode : ${traceMode}`);
@@ -234,6 +219,9 @@ function printAnalysisResult(
   if (error) {
     console.log(`error.type : ${error.type}`);
     console.log(`error.msg  : ${error.message}`);
+  }
+  if (warnings && warnings.length > 0) {
+    console.log(`warnings   : ${warnings.map((w) => w.type).join(",")}`);
   }
 }
 

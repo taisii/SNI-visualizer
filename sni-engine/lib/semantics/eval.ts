@@ -1,5 +1,10 @@
 import type { Expr } from "@/muasm-ast";
-import { type AbsState, type RelValue, defaultRegRel } from "../core/state";
+import {
+  type AbsState,
+  type RelValue,
+  defaultRegRel,
+  makeRel,
+} from "../core/state";
 import { relJoin, getReg, getMem } from "../core/state-ops";
 import { stringifyExpr } from "./parse";
 
@@ -8,7 +13,7 @@ export function evalExpr(state: AbsState, expr: Expr): RelValue {
     case "reg":
       return getReg(state, expr.name);
     case "int":
-      return { ns: "Low", sp: "Low" };
+      return makeRel("Low", "Low");
     case "binop":
       return relJoin(evalExpr(state, expr.left), evalExpr(state, expr.right));
     default:

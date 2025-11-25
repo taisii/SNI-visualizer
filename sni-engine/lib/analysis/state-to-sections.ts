@@ -15,18 +15,24 @@ export type SpecContextInfo = {
 type StateToSectionsOptions = {
   specStack?: SpecStack;
   specContextInfo?: Map<string, SpecContextInfo>;
+  /**
+   * 投機パスを「観測だけ残して廃棄」するためのフラグ。
+   * true のとき regs/mem セクションを生成しない。
+   */
+  dropNonObservables?: boolean;
 };
 
 export function stateToSections(
   state: AbsState,
   options: StateToSectionsOptions = {},
 ) {
-  const { specStack, specContextInfo } = options;
+  const { specStack, specContextInfo, dropNonObservables = false } = options;
   const regs: Record<string, ReturnType<typeof toDisplay>> = {};
   const mem: Record<string, ReturnType<typeof toDisplay>> = {};
   const obsMem: Record<string, ReturnType<typeof toDisplay>> = {};
   const obsCtrl: Record<string, ReturnType<typeof toDisplay>> = {};
   const stackData: Record<string, ReturnType<typeof toDisplay>> = {};
+  const budgetData: Record<string, ReturnType<typeof toDisplay>> = {};
 
   for (const [k, v] of state.regs) {
     const joined = join(securityToLattice(v.ns), securityToLattice(v.sp));
@@ -59,22 +65,21 @@ export function stateToSections(
       };
     });
   }
+  // budget 表示（Spec モード時のみ有意。NS は inf）
+  budgetData.w = {
+    label: state.budget === "inf" ? "∞" : String(state.budget),
+    style: "info",
+    description: "残り投機ステップ（Pruning-VCFG）",
+  };
 
   const hasMemViolation = Array.from(state.obsMem.values()).some(
-    (v) => v === "Leak" || v === "Top",
+    (v) => v === "Leak",
   );
   const hasCtrlViolation = Array.from(state.obsCtrl.values()).some(
-    (v) => v === "Leak" || v === "Top",
+    (v) => v === "Leak",
   );
 
   const sections: StateSection[] = [
-    {
-      id: "regs",
-      title: "Registers",
-      type: "key-value" as const,
-      data: regs,
-    },
-    { id: "mem", title: "Memory", type: "key-value" as const, data: mem },
     {
       id: "obsMem",
       title: "Memory Observations",
@@ -91,12 +96,32 @@ export function stateToSections(
     },
   ];
 
+  if (!dropNonObservables) {
+    sections.unshift(
+      { id: "mem", title: "Memory", type: "key-value" as const, data: mem },
+    );
+    sections.unshift({
+      id: "regs",
+      title: "Registers",
+      type: "key-value" as const,
+      data: regs,
+    });
+  }
+
   sections.push({
     id: "specStack",
     title: "Speculation Stack",
     type: "key-value" as const,
     data: stackData,
   });
+  if (state.budget !== "inf") {
+    sections.push({
+      id: "specBudget",
+      title: "Speculation Budget",
+      type: "key-value" as const,
+      data: budgetData,
+    });
+  }
 
   return { sections };
 }

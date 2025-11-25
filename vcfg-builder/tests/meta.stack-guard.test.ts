@@ -1,18 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { buildVCFG } from "..";
 
-describe("buildVCFG stack-guard mode", () => {
-  it("stack-guard は rollback エッジを保持する（discard とは異なる）", () => {
-    const graph = buildVCFG(
-      `
+describe("buildVCFG speculationMode バリデーション", () => {
+  it("discard 以外を指定するとエラーを投げる", () => {
+    expect(() =>
+      buildVCFG(
+        `
 beqz x, L
 skip
 L: skip
 `,
-      { windowSize: 2, speculationMode: "stack-guard" },
-    );
-
-    const rollbackEdges = graph.edges.filter((e) => e.type === "rollback");
-    expect(rollbackEdges.length).toBeGreaterThan(0);
+        // @ts-expect-error 故意に無効値を渡す
+        { speculationMode: "stack-guard" },
+      ),
+    ).toThrow(/discard のみサポート/);
   });
 });

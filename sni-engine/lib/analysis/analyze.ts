@@ -15,18 +15,16 @@ import {
   initState,
 } from "../core/state";
 import { validateGraph, getEntryNode, getAdj } from "./graph";
-import {
-  applyInstruction,
-  type ExecMode as ExecutionMode,
-} from "../semantics";
+import { applyInstruction, type ExecMode as ExecutionMode } from "../semantics";
 import {
   mergeState,
   seedRegs,
   stateHasViolation,
-  extractObservations,
+  stateHasTop,
 } from "../core/state-ops";
 import { stateToSections, type SpecContextInfo } from "./state-to-sections";
 import { collectRegisterNames } from "./registers";
+import { cloneState, decrementBudget } from "../core/state";
 
 export type AnalyzeOptions = {
   iterationCap?: number;
@@ -35,48 +33,22 @@ export type AnalyzeOptions = {
   entryNodeId?: string;
   maxSteps?: number;
   traceMode?: TraceMode;
-  maxSpeculationDepth?: number;
-  speculationMode?: SpeculationMode;
+  specWindow?: number;
 };
-
-export type SpeculationMode = "discard" | "stack-guard";
 
 const DEFAULT_CAP = 10_000;
 const DEFAULT_MAX_STEPS = 10_000;
 const DEFAULT_TRACE_MODE: TraceMode = "bfs";
-const DEFAULT_MAX_SPECULATION_DEPTH = 20;
-const DEFAULT_SPECULATION_MODE: SpeculationMode = "stack-guard";
+const DEFAULT_SPEC_WINDOW = 20;
 
-type ContextStack = readonly string[];
+type LogStack = readonly string[];
 
-const makeModeKey = (
+const makeModeKey = (mode: ExecutionMode): string => mode;
+
+const deriveInitialLogStack = (
+  node: GraphNode,
   mode: ExecutionMode,
-  stack: ContextStack,
-  stackKey: (stack: ContextStack) => string,
-): string =>
-  mode === "NS" ? "NS" : `Speculative|${stackKey(stack)}`;
-
-const makeStackKey = (stack: ContextStack) =>
-  stack.length === 0 ? "root" : stack.join("::");
-
-const pushContext = (stack: ContextStack, ctxId?: string): ContextStack => {
-  if (!ctxId) return stack;
-  return [...stack, ctxId];
-};
-
-const popContext = (stack: ContextStack, ctxId?: string): ContextStack => {
-  if (!ctxId) return stack.length === 0 ? stack : [];
-  if (stack.length === 0) return stack;
-  const top = stack[stack.length - 1];
-  if (top === ctxId) {
-    return stack.slice(0, -1);
-  }
-  const idx = stack.lastIndexOf(ctxId);
-  if (idx === -1) return [];
-  return stack.slice(0, idx);
-};
-
-const deriveInitialStack = (node: GraphNode, mode: ExecutionMode): string[] => {
+): string[] => {
   if (mode !== "Speculative") return [];
   const ctxId = node.specContext?.id;
   return ctxId ? [ctxId] : [];
@@ -125,7 +97,11 @@ export async function analyzeVCFG(
   opts: AnalyzeOptions = {},
 ): Promise<AnalysisResult> {
   const traceMode = opts.traceMode ?? DEFAULT_TRACE_MODE;
+  const specMode = "light" as const;
+  const specWindow = opts.specWindow ?? DEFAULT_SPEC_WINDOW;
+  const specWindowActive = specMode === "light";
   const warnings: AnalysisWarning[] = [];
+  const topWarned = new Set<string>();
   let graph: StaticGraph;
   try {
     graph = validateGraph(rawGraph);
@@ -141,23 +117,34 @@ export async function analyzeVCFG(
         message: err instanceof Error ? err.message : String(err),
         detail: err,
       },
+      specWindow: specWindowActive ? specWindow : undefined,
       warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
   const iterationCap = opts.iterationCap ?? DEFAULT_CAP;
   const maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
-  const maxSpeculationDepth =
-    opts.maxSpeculationDepth ?? DEFAULT_MAX_SPECULATION_DEPTH;
-  const speculationMode = opts.speculationMode ?? DEFAULT_SPECULATION_MODE;
-  const discardSpec = speculationMode === "discard";
-  const stackGuardEnabled = speculationMode === "stack-guard";
-  const stackKeyFn = makeStackKey;
-  const speculationDepthWarned = new Set<string>();
   const nodeMap = new Map(graph.nodes.map((n) => [n.id, n] as const));
   const usedRegs = collectRegisterNames(graph);
   const specContextInfo = buildSpecContextInfo(graph);
   const entryNode = getEntryNode(graph, opts.entryNodeId, nodeMap);
   const adj = getAdj(graph);
+
+  if (specWindowActive && specWindow <= 0) {
+    return {
+      schemaVersion: ANALYSIS_SCHEMA_VERSION,
+      graph,
+      trace: { steps: [] },
+      traceMode,
+      result: "SNI_Violation",
+      error: {
+        type: "AnalysisError",
+        message: "specWindow must be greater than 0",
+        detail: { specWindow },
+      },
+      specWindow,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    };
+  }
 
   const states = new Map<string, Map<string, AbsState>>();
   const ensureState = (nodeId: string, modeKey: string): AbsState => {
@@ -170,23 +157,25 @@ export async function analyzeVCFG(
 
   const entryMode: ExecutionMode =
     entryNode.type === "spec" ? "Speculative" : "NS";
-  const entryStack = deriveInitialStack(entryNode, entryMode);
-  const entryModeKey = makeModeKey(entryMode, entryStack, stackKeyFn);
+  const entryLogStack = deriveInitialLogStack(entryNode, entryMode);
+  const entryModeKey = makeModeKey(entryMode);
   ensureState(entryNode.id, entryModeKey);
   const seededInit = initState(opts.policy, opts.entryRegs);
+  seededInit.budget =
+    entryMode === "Speculative" && specWindowActive ? specWindow : "inf";
   seedRegs(seededInit, usedRegs);
   states.get(entryNode.id)?.set(entryModeKey, seededInit);
 
   type WorkItem = {
     nodeId: string;
     executionMode: ExecutionMode;
-    stack: ContextStack;
+    logStack: LogStack;
   };
   const worklist: WorkItem[] = [
     {
       nodeId: entryNode.id,
       executionMode: entryMode,
-      stack: entryStack,
+      logStack: entryLogStack,
     },
   ];
   const takeNext = (): WorkItem | undefined =>
@@ -196,15 +185,16 @@ export async function analyzeVCFG(
   const stepLogs: TraceStep[] = [];
   let stepId = 0;
 
-  const init =
-    states.get(entryNode.id)?.get(entryModeKey) ?? bottomState();
+  const init = states.get(entryNode.id)?.get(entryModeKey) ?? bottomState();
   stepLogs.push({
     stepId,
     nodeId: "", // entry はどのノードにもフォーカスさせない
     description: "(entry)",
     executionMode: entryMode,
+    specWindowRemaining:
+      entryMode === "Speculative" && specWindowActive ? specWindow : undefined,
     state: stateToSections(init, {
-      specStack: entryStack,
+      specStack: entryLogStack,
       specContextInfo,
     }),
     isViolation: stateHasViolation(init),
@@ -213,12 +203,28 @@ export async function analyzeVCFG(
   while (worklist.length > 0) {
     const shifted = takeNext();
     if (!shifted) break;
-    const { nodeId, executionMode, stack } = shifted;
+    const { nodeId, executionMode, logStack } = shifted;
     const node = nodeMap.get(nodeId);
     if (!node) continue;
-    const modeKey = makeModeKey(executionMode, stack, stackKeyFn);
+    const modeKey = makeModeKey(executionMode);
     const inState = ensureState(nodeId, modeKey);
     seedRegs(inState, usedRegs);
+
+    let currentBudget: number | undefined;
+    let nextBudget: number | "inf" = inState.budget;
+
+    if (specWindowActive && executionMode === "Speculative") {
+      currentBudget =
+        inState.budget === "inf" ? specWindow : (inState.budget as number);
+      if (currentBudget <= 0) {
+        // Pruning: これ以上遷移しない
+        continue;
+      }
+      nextBudget =
+        inState.budget === "inf"
+          ? "inf"
+          : (decrementBudget(inState.budget) as number);
+    }
 
     let outState: AbsState;
     try {
@@ -235,9 +241,11 @@ export async function analyzeVCFG(
           message: err instanceof Error ? err.message : String(err),
           detail: err,
         },
+        specWindow: specWindowActive ? specWindow : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
+    outState.budget = nextBudget;
     states.get(nodeId)?.set(modeKey, outState);
 
     stepId += 1;
@@ -253,18 +261,39 @@ export async function analyzeVCFG(
           message: "maxSteps exceeded",
           detail: { maxSteps },
         },
+        specWindow: specWindowActive ? specWindow : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
     const violation = stateHasViolation(outState);
+    const hasTop = stateHasTop(outState);
+    const dropNonObservables =
+      executionMode === "Speculative" &&
+      specWindowActive &&
+      outState.budget !== "inf" &&
+      outState.budget <= 0;
+    if (hasTop) {
+      const warnKey = `${nodeId}|${executionMode}`;
+      if (!topWarned.has(warnKey)) {
+        topWarned.add(warnKey);
+        warnings.push({
+          type: "TopObserved",
+          message:
+            "観測トレースに解析不能 (Top) が含まれます。結果は不確定です。",
+          detail: { nodeId },
+        });
+      }
+    }
     stepLogs.push({
       stepId,
       nodeId,
       description: node.label ?? "",
       executionMode,
+      specWindowRemaining: currentBudget,
       state: stateToSections(outState, {
-        specStack: stack,
+        specStack: logStack,
         specContextInfo,
+        dropNonObservables,
       }),
       isViolation: violation,
     });
@@ -276,6 +305,7 @@ export async function analyzeVCFG(
         trace: { steps: stepLogs } as ExecutionTrace,
         traceMode,
         result: "SNI_Violation",
+        specWindow: specWindowActive ? specWindow : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
@@ -284,100 +314,68 @@ export async function analyzeVCFG(
     for (const e of edges) {
       const tgtId = e.target;
       const targetNode = nodeMap.get(tgtId);
-      const isSpecNode = targetNode?.type === "spec";
-
-      if (discardSpec && e.type === "rollback") {
-        // discard モードでは rollback へ遷移しない
-        continue;
+      if (e.type === "spec" && executionMode !== "Speculative") {
+        // NS -> spec エッジは spec-begin への突入のみ許可
+        if (
+          targetNode?.type !== "spec" ||
+          targetNode.specContext?.phase !== "begin"
+        ) {
+          continue;
+        }
       }
 
-      if (e.type === "spec" && executionMode !== "Speculative") {
-        if (!isSpecNode) {
-          // NS 実行中は meta ノードを経由しない spec エッジを無視
-          continue;
+      let targetExecutionMode: ExecutionMode = executionMode;
+      const successorState = cloneState(outState);
+      let nextLogStack: LogStack = logStack;
+
+      if (e.type === "spec") {
+        targetExecutionMode = "Speculative";
+        const entering = targetNode?.specContext?.phase === "begin";
+        if (entering) {
+          // spec-begin に入った時点でリソースを最大値にリセットし、ログ用スタックに push する
+          nextLogStack = targetNode?.specContext?.id
+            ? [...logStack, targetNode.specContext.id]
+            : logStack;
+          // NS -> spec-begin のときだけリセット。既に投機中なら残量を引き継ぐ。
+          if (executionMode === "NS") {
+            successorState.budget =
+              specWindowActive && targetExecutionMode === "Speculative"
+                ? specWindow
+                : "inf";
+          } else {
+            successorState.budget = outState.budget;
+          }
+        } else {
+          successorState.budget = outState.budget;
         }
-        if (targetNode.specContext?.phase === "end") {
-          // spec-end は投機中のみ訪問可能
-          continue;
-        }
+      } else if (targetExecutionMode === "Speculative") {
+        successorState.budget = outState.budget;
+      } else {
+        successorState.budget = "inf";
       }
 
       if (
-        stackGuardEnabled &&
-        e.type === "spec" &&
-        targetNode?.specContext?.phase === "end"
+        specWindowActive &&
+        targetExecutionMode === "Speculative" &&
+        successorState.budget !== "inf" &&
+        successorState.budget <= 0
       ) {
-        const top = stack.at(-1);
-        if (!top || top !== targetNode.specContext.id) {
-          // 異なるコンテキストの spec-end への突入を拒否
-          continue;
-        }
+        continue;
       }
 
-      let nextStack: ContextStack = stack;
-      let targetExecutionMode: ExecutionMode = executionMode;
-      if (e.type === "spec") {
-        targetExecutionMode = "Speculative";
-        const contextIdToPush =
-          targetNode && targetNode.specContext?.phase === "begin"
-            ? targetNode.specContext.id
-            : undefined;
-
-        if (
-          contextIdToPush &&
-          stack.length >= maxSpeculationDepth
-        ) {
-          const warnKey = `${contextIdToPush}:${stack.length}`;
-          if (!speculationDepthWarned.has(warnKey)) {
-            speculationDepthWarned.add(warnKey);
-            warnings.push({
-              type: "MaxSpeculationDepth",
-              message: `maxSpeculationDepth(${maxSpeculationDepth}) reached before entering speculative context ${contextIdToPush}`,
-              detail: {
-                contextId: contextIdToPush,
-                nodeId,
-                maxSpeculationDepth,
-                stackDepth: stack.length,
-              },
-            });
-          }
-          // 投機深さ制限に達している場合は、新たな投機コンテキストには入らない
-          continue;
-        }
-
-        nextStack = pushContext(stack, contextIdToPush);
-      } else if (e.type === "rollback") {
-        const popped = popContext(stack, node.specContext?.id);
-        nextStack = popped;
-        targetExecutionMode = popped.length > 0 ? "Speculative" : "NS";
-      }
-
-      const targetModeKey = makeModeKey(
-        targetExecutionMode,
-        nextStack,
-        stackKeyFn,
-      );
+      const targetModeKey = makeModeKey(targetExecutionMode);
       const existingStates = states.get(tgtId);
       const hadState = existingStates?.has(targetModeKey) ?? false;
       const tgtState = ensureState(tgtId, targetModeKey);
       seedRegs(tgtState, usedRegs);
 
-      const { changed } =
-        e.type === "rollback"
-          ? mergeState(
-              tgtState,
-              extractObservations(outState),
-              { regs: false, mem: false, obsMem: true, obsCtrl: true },
-            )
-          : mergeState(tgtState, outState);
+      const { changed } = mergeState(tgtState, successorState);
       const needsVisit = changed || !hadState;
       if (needsVisit) {
-        ensureState(tgtId, targetModeKey);
-        states.get(tgtId)?.set(targetModeKey, tgtState);
         worklist.push({
           nodeId: tgtId,
           executionMode: targetExecutionMode,
-          stack: nextStack,
+          logStack: nextLogStack,
         });
       }
     }
@@ -395,6 +393,7 @@ export async function analyzeVCFG(
           message: "iterationCap exceeded",
           detail: { iterationCap },
         },
+        specWindow: specWindowActive ? specWindow : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
@@ -407,6 +406,7 @@ export async function analyzeVCFG(
     trace: { steps: stepLogs } as ExecutionTrace,
     traceMode,
     result: finalViolation ? "SNI_Violation" : "Secure",
+    specWindow: specWindowActive ? specWindow : undefined,
     warnings: warnings.length > 0 ? warnings : undefined,
   };
   return result;
