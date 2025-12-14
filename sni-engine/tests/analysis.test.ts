@@ -118,6 +118,36 @@ describe("analyzeVCFG (pruning VCFG)", () => {
     expect(s1Step?.specWindowRemaining).toBe(1);
   });
 
+  it("spbarr stops speculative execution beyond the barrier", async () => {
+    // n0 --spec--> sb(spec-begin) --ns--> b1(spbarr) --ns--> s2(load secret)
+    // spbarr に到達した時点で投機を打ち切り、s2 に到達しないことを期待する。
+    const graph: StaticGraph = {
+      nodes: [
+        node("n0", 0, "ns", "beqz x, L"),
+        specBegin("sb", -1, "ctx"),
+        node("b1", 1, "spec", "spbarr"),
+        node("s2", 2, "spec", "load r secret"),
+      ],
+      edges: [
+        edge("n0", "sb", "spec"),
+        edge("sb", "b1", "ns"),
+        edge("b1", "s2", "ns"),
+      ],
+    };
+
+    const res = await analyzeVCFG(graph, {
+      specWindow: 5,
+      policy: { mem: { secret: "High" }, regs: { secret: "High", r: "Low" } },
+    });
+
+    expect(res.result).toBe("Secure");
+    const visited = res.trace.steps.map((s) => s.nodeId);
+    expect(visited).toContain("b1");
+    expect(visited).not.toContain("s2");
+    const b1Step = res.trace.steps.find((s) => s.nodeId === "b1");
+    expect(b1Step?.executionMode).toBe("Speculative");
+  });
+
   it("keeps larger budget on join to avoid losing reachable speculative steps", async () => {
     // sb -> s2 (spec) と sb -> t1(ns) -> s2(spec) で budget=2 と 1 が合流する
     const graph: StaticGraph = {

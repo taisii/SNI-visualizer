@@ -45,6 +45,13 @@ type LogStack = readonly string[];
 
 const makeModeKey = (mode: ExecutionMode): string => mode;
 
+const isSpbarr = (node: GraphNode): boolean => {
+  if (node.instructionAst) return node.instructionAst.op === "spbarr";
+  const raw = node.instruction ?? "";
+  const [op] = raw.trim().split(/\s+/);
+  return op === "spbarr";
+};
+
 const deriveInitialLogStack = (
   node: GraphNode,
   mode: ExecutionMode,
@@ -224,6 +231,10 @@ export async function analyzeVCFG(
         inState.budget === "inf"
           ? "inf"
           : (decrementBudget(inState.budget) as number);
+      // 投機バリア: ここ以降を投機として実行しない（以降の spec 遷移を打ち切る）
+      if (isSpbarr(node)) {
+        nextBudget = 0;
+      }
     }
 
     let outState: AbsState;
