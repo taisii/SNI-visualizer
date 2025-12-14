@@ -1,0 +1,15 @@
+% Edge case: spbarr（投機バリア）
+% 理想的には spbarr 以降は投機実行されない想定なら、このプログラムは Secure になるはず。
+% ただし現行実装では spbarr が no-op のため、現状は Violation が出る可能性が高い。
+%
+% 期待（理想）: Secure
+% 期待（現行実装）: SNI_Violation（要確認）
+
+    beqz x,L1
+    jmp End
+L1:
+    load secret,in
+    spbarr
+    load z,secret
+End:
+    skip

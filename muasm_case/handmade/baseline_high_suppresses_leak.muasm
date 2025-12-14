@@ -1,0 +1,13 @@
+% Edge case: NS 側で既に High 観測済みの観測点は、Spec 側で High を観測しても
+% 「追加漏洩」ではない（EqHigh ベースラインにより Leak を抑制できるはず）。
+%
+% ポイント: 同一 PC の load をループで再実行し、観測キー（pc:addr）が一致する形にする。
+% 期待: Secure
+
+    load secret,in
+Loop:
+    load z,secret
+    beqz x,End
+    jmp Loop
+End:
+    skip

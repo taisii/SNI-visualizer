@@ -1,0 +1,12 @@
+% Edge case: CTRLLEAK（分岐条件の観測）
+% Spec 側でのみ cond が High になった beqz/bnez が存在すると Leak になるはず。
+%
+% 期待: SNI_Violation
+
+    beqz x,L1
+    jmp End
+L1:
+    load secret,in
+    beqz secret,End
+End:
+    skip

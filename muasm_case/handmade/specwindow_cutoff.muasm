@@ -1,0 +1,24 @@
+% Edge case: specWindow による Pruning
+% Leak が specWindow を超えた先にあると、specWindow が小さい場合は見逃す（= Secure になる）ことがある。
+%
+% 期待:
+% - specWindow が十分大きい: SNI_Violation
+% - specWindow が小さい: Secure
+
+    beqz x,L1
+    jmp End
+L1:
+    load secret,in
+    skip
+    skip
+    skip
+    skip
+    skip
+    skip
+    skip
+    skip
+    skip
+    skip
+    load z,secret
+End:
+    skip

@@ -1,0 +1,11 @@
+% Edge case: Spec 側で追加のメモリアクセスがあっても、
+% 観測されるアドレスが常に Low なら Leak にはならないはず。
+%
+% 期待: Secure
+
+    beqz x,L1
+    jmp End
+L1:
+    load tmp,in
+End:
+    skip
