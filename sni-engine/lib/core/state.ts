@@ -101,14 +101,6 @@ export function initState(
   return { regs, mem, obsMem, obsCtrl, budget: "inf" };
 }
 
-/**
- * 仕様上「エントリ以外=EqHigh」を既定値とする。
- * 未到達ノードでは state 自体が存在しないため Bot のまま。
- */
-export function defaultLattice(): LatticeValue {
-  return "EqHigh";
-}
-
 export function defaultRegRel(): RelValue {
   return makeRel("Low", "Low");
 }
@@ -131,7 +123,7 @@ export function securityToLattice(v: SecurityPoint): LatticeValue {
   }
 }
 
-export function latticeToSecurity(v: LatticeValue): SecurityPoint {
+function latticeToSecurity(v: LatticeValue): SecurityPoint {
   switch (v) {
     case "EqLow":
       return "Low";
@@ -171,10 +163,7 @@ export function decrementBudget(b: SpecBudget): SpecBudget {
 }
 
 // --- RelValue 補助 ---
-export function deriveRelation(
-  ns: SecurityPoint,
-  sp: SecurityPoint,
-): LatticeValue {
+function deriveRelation(ns: SecurityPoint, sp: SecurityPoint): LatticeValue {
   if (ns === "Bot" || sp === "Bot") return "Bot";
   if (ns === "Top" || sp === "Top") return "Top";
   if (ns === "High" && sp === "High") return "EqHigh";

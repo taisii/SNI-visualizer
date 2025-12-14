@@ -9,7 +9,7 @@ export function mergeObservation(
 }
 
 // NS 側更新（ベースライン構築）: 文献 4.4.2 の規則を実装
-export function updateObservationNS(
+function updateObservationNS(
   prev: LatticeValue,
   observed: LatticeValue,
 ): LatticeValue {
@@ -20,7 +20,7 @@ export function updateObservationNS(
 }
 
 // SP 側更新（逸脱検査）: 文献 4.4.2 の規則を実装
-export function updateObservationSpec(
+function updateObservationSpec(
   prev: LatticeValue,
   observed: LatticeValue,
 ): LatticeValue {

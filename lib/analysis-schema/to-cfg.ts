@@ -10,7 +10,8 @@ export function toCFG(graph: StaticGraph): StaticGraph {
   const nsNodeIds = new Set(nsNodes.map((n) => n.id));
 
   const nsEdges = graph.edges.filter(
-    (e) => e.type === "ns" && nsNodeIds.has(e.source) && nsNodeIds.has(e.target),
+    (e) =>
+      e.type === "ns" && nsNodeIds.has(e.source) && nsNodeIds.has(e.target),
   );
 
   // ノード・エッジともに浅いコピーを返し、元のグラフを汚さない

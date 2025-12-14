@@ -186,7 +186,6 @@ export default function Home() {
         message,
       });
       setResult(null);
-      resetWarningsToast(lastWarningsToastRef);
     } finally {
       setIsLoading(false);
       pendingBfsRetryRef.current = false;

@@ -409,7 +409,10 @@ L1: skip
 `;
     const graph = buildVCFG(program);
     const res = await analyzeVCFG(graph, {
-      policy: { regs: { x: "Low", secret: "High", r: "Low" }, mem: { secret: "High" } },
+      policy: {
+        regs: { x: "Low", secret: "High", r: "Low" },
+        mem: { secret: "High" },
+      },
       traceMode: "single-path",
       specWindow: 1,
     });

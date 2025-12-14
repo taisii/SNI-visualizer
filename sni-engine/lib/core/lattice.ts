@@ -74,10 +74,6 @@ export function join(a: LatticeValue, b: LatticeValue): LatticeValue {
   return JOIN_TABLE[a][b];
 }
 
-export function lte(a: LatticeValue, b: LatticeValue): boolean {
-  return ORDER.indexOf(a) <= ORDER.indexOf(b);
-}
-
 export function toDisplay(value: LatticeValue): DisplayValue {
   switch (value) {
     case "Bot":

@@ -13,6 +13,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ChevronDownIcon } from "lucide-react";
+import { formatObservationKey } from "./formatObservationKey";
 
 type Props = {
   state: AbstractState | null;
@@ -171,34 +172,6 @@ export function StateViewer({ state, graph }: Props) {
     }
   }
 
-  const formatObservationKey = (sectionId: string, key: string): string => {
-    if (!graph) return key;
-
-    if (sectionId === "obsMem") {
-      const m = key.match(/^(\d+):(.*)$/);
-      if (!m) return key;
-      const pc = Number(m[1]);
-      const addr = m[2];
-      const instr = pcToInstr.get(pc);
-      if (instr && instr.length > 0) {
-        return `${pc}: ${instr} [addr=${addr}]`;
-      }
-      return `pc=${pc} addr=${addr}`;
-    }
-
-    if (sectionId === "obsCtrl") {
-      const pc = Number(key);
-      if (Number.isNaN(pc)) return key;
-      const instr = pcToInstr.get(pc);
-      if (instr && instr.length > 0) {
-        return `${pc}: ${instr}`;
-      }
-      return `pc=${pc}`;
-    }
-
-    return key;
-  };
-
   return (
     <div className="flex h-full flex-col gap-3 rounded border border-neutral-200 bg-white p-3">
       <div className="text-sm font-semibold text-neutral-800">
@@ -260,7 +233,7 @@ export function StateViewer({ state, graph }: Props) {
             ([key, value], position) => {
               const displayKey =
                 section.id === "obsMem" || section.id === "obsCtrl"
-                  ? formatObservationKey(section.id, key)
+                  ? formatObservationKey(section.id, key, pcToInstr)
                   : key;
 
               return {

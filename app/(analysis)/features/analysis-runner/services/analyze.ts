@@ -1,5 +1,5 @@
 import type { AnalysisResult } from "@/lib/analysis-schema";
-import type { AnalyzeOptions } from "@/sni-engine";
+import type { AnalyzeOptions } from "@/lib/analysis-engine";
 import { analyze as runAnalysis } from "@/lib/analysis-engine";
 
 // UI から解析エンジンを呼び出す薄いファサード。

@@ -104,14 +104,6 @@ export type StateSection = {
   alert?: boolean;
 };
 
-export type DisplayLattice =
-  | "Bot"
-  | "EqLow"
-  | "EqHigh"
-  | "Diverge"
-  | "Leak"
-  | "Top";
-
 export type DisplayValue = {
   label: string;
   style: "neutral" | "safe" | "warning" | "danger" | "info";

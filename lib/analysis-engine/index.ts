@@ -7,6 +7,9 @@ import {
   type TraceMode,
 } from "@/lib/analysis-schema";
 
+// Re-export AnalyzeOptions so UI code only depends on lib/analysis-engine
+export type { AnalyzeOptions };
+
 type RunnerOptions = AnalyzeOptions;
 
 function buildErrorResult(

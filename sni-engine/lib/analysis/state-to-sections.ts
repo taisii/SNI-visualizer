@@ -97,9 +97,12 @@ export function stateToSections(
   ];
 
   if (!dropNonObservables) {
-    sections.unshift(
-      { id: "mem", title: "Memory", type: "key-value" as const, data: mem },
-    );
+    sections.unshift({
+      id: "mem",
+      title: "Memory",
+      type: "key-value" as const,
+      data: mem,
+    });
     sections.unshift({
       id: "regs",
       title: "Registers",
