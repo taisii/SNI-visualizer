@@ -1,0 +1,43 @@
+% Gadget: Spectre Variant 1.1 (Bounds Check Bypass Store)
+%
+% 概要:
+% 境界チェックを投機的に迂回し、Out-of-bounds Store を行う。
+% これにより、リターンアドレスや関数のポインタなどを書き換え、
+% 投機的ROP (Return-Oriented Programming) などを引き起こす攻撃。
+%
+% ここでは簡易化し、"Secret を不当な場所に書き込む" または 
+% "重要なフラグを書き換える" 挙動を模倣する。
+%
+% 前提:
+% ストア自体が Leak とみなされるか (Control/Mem)、
+% あるいは書き込んだ値が後でロードされて Leak するか。
+% 今回は「Secret値を任意の場所に書き込める」=「書き込み先アドレスが公知なら値がLeak」とみなす。
+%
+% 期待: SNI_Violation (MemLeak via Store)
+
+    size <- 5
+    base <- 0x1000
+    
+    load r_idx, in    % Attacker controlled index
+    load r_val, in    % Attacker controlled value (or Secret)
+    
+    % Secret をロードしておく (書き込む対象)
+    load r_secret, in
+    
+    % 境界チェック
+    cond <- r_idx < size
+    beqz cond, End
+    
+    % --- Speculative Store ---
+    
+    % array[r_idx] = r_secret
+    % 本来書き込めない場所に Secret を書き込む
+    addr <- base + r_idx
+    store r_secret, addr
+
+    % (Optional: 確認のため読み出す)
+    % 攻撃者が addr を知っていれば、ここへの書き込み(キャッシュ変化)で値を知りうる
+    % SNIエンジンは Store のアドレス/値の依存関係をチェックする
+    
+End:
+    skip

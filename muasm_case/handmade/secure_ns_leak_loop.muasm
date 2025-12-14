@@ -1,0 +1,18 @@
+% Case: Loop NS Leak (Secure)
+%
+% 概要:
+% ループ内で繰り返し Secret を漏洩する。
+% 何度実行しても NS 側での漏洩であるため、ベースラインが更新され続け、Secure となるべき。
+%
+% 期待: Secure
+
+    c <- 3
+    load s, in
+Loop:
+    c <- c - 1
+    
+    % 毎回 Leak (NS)
+    load z, s
+    
+    bnez c, Loop
+    skip

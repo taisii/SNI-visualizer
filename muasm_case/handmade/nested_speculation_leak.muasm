@@ -1,0 +1,23 @@
+% Case: Nested Speculation Leak
+%
+% 概要:
+% 二重の分岐予測ミス（ネストした投機）の奥深くで発生する Leak。
+% 投機コンテキストスタックが正しく深さを管理し、
+% ネストした投機状態でも汚染伝播を追跡できているかを確認する。
+%
+% 期待: SNI_Violation
+% (投機ウィンドウが十分に大きければ検出されるべき)
+
+    % 分岐1 (Mispredict)
+    beqz r0, L1
+    skip
+L1:
+    % 分岐2 (Mispredict - Nested)
+    beqz r1, L2
+    skip
+L2:
+    % ネストした投機の最深部
+    load s, in
+    
+    % Leak発生
+    load z, s

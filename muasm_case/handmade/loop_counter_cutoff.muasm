@@ -1,0 +1,23 @@
+% Case: Loop Counter & Speculation Window
+%
+% 概要:
+% ループによって投機長（ステップ数）を稼いだ後に Leak するケース。
+% 投機ウィンドウを「長さ（ステップ数）」として定義する場合、
+% ループの回転数次第で Leak がウィンドウ外（観測不可）になるか、内側（観測可能）になるかが変わる。
+%
+% 設定:
+% ループ3回 * 2命令 = 6ステップ消費
+% その後に Leak
+%
+% 期待: 
+% specWindow >= 10 程度なら SNI_Violation
+% specWindow < 6 なら Secure (到達不能)
+
+    c <- 3
+Loop:
+    c <- c - 1
+    bnez c, Loop
+    
+    % ループ脱出後に Leak
+    load s, in
+    load z, s

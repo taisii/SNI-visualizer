@@ -1,0 +1,36 @@
+% Case: Memory Aliasing (Store-to-Load Forwarding ambiguity)
+% 
+% 概要:
+% 不定のアドレスへのストアと、不定のアドレスからのロードが続く場合。
+% 解析器がアドレスのエイリアス（衝突）の可能性を保守的に評価していれば、
+% secret の書き込みが public なロードに波及する可能性を検知して Violation になるはず。
+%
+% 期待: SNI_Violation
+% (アドレス解析が Top または May-Alias になるため)
+
+    % Force Speculative Only:
+    % (Checking r_safe=0, NS jumps to Safe. SP falls through)
+    r_safe <- 0
+    beqz r_safe, Safe
+
+    % --- Speculative Path ---
+    
+    % secret を読み込む (in is assumed High or we need to ensure it)
+    load s, in
+    
+    % r0 を入力から読み込み
+    r0 <- in
+    % r1 を r0 と同じにする (確実にエイリアスさせる)
+    r1 <- r0
+    
+    % ストア
+    store s, r0
+
+    % ロード (エイリアス)
+    load v, r1
+
+    % 観測点 (v は s 由来の High になるはず)
+    load z, v
+
+Safe:
+    skip

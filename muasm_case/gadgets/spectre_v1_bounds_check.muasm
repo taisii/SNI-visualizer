@@ -1,0 +1,50 @@
+% Gadget: Spectre Variant 1 (Bounds Check Bypass)
+%
+% C-pseudocode:
+%   if (x < array1_size) {
+%       y = array2[array1[x] * 512];
+%   }
+%
+% 概要:
+% 配列の境界チェックを投機的に迂回し、Out-of-bounds Read で Secret を読み込み、
+% それをインデックスとして別の配列にアクセスすることで Cache Side-channel を形成する。
+%
+% 前提: 
+% x (= r_idx) は攻撃者が制御可能 (Low) だが、境界外の値になり得る。
+% 投機実行時のみ、境界チェックをすり抜けて実行される。
+%
+% 期待: SNI_Violation
+% (投機パスでのみ Secret 依存のメモリアクセスが発生するため)
+
+    % 定数設定
+    size  <- 5
+    base1 <- 0x1000  % array1 address
+    base2 <- 0x2000  % array2 address
+
+    % 攻撃者入力 (index)
+    load r_idx, in
+    
+    % 境界チェック: if (r_idx >= size) goto End
+    cond <- r_idx < size
+    % cond == 0 (False) なら境界外 -> 脱出
+    % しかし誤予測でここを通過し、cond=0 なのに実行を続けると仮定（投機）
+    beqz cond, End
+    
+    % --- Speculative Execution (if mispredicted) ---
+
+    % 1. 境界外アクセス (Out-of-Bounds Read)
+    % array1[r_idx] -> Secret を読むことになる (r_idx が巨大な場合)
+    % addr1 <- base1 + r_idx (簡易化: 加算)
+    addr1 <- base1 + r_idx
+    load r_secret, addr1
+    
+    % 2. サイドチャネル送信 (Dependent Load)
+    % array2[r_secret * 512] にアクセス
+    % r_secret の値によってアクセス先が変わる -> Cache Leak
+    
+    % addr2 <- base2 + r_secret (簡易化)
+    addr2 <- base2 + r_secret
+    load r_temp, addr2
+
+End:
+    skip

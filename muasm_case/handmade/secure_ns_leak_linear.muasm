@@ -1,0 +1,18 @@
+% Case: Linear NS Leak (Secure)
+%
+% 概要:
+% NS 実行パス上で無条件に Secret を漏洩する。
+% SNI の定義では、NS で観測される情報は「観測されても良い（ベースライン）」とされるため、
+% これは Violation ではなく Secure となるべき。
+% (Speculative Non-Interference は "投機によって" 追加で漏れることを防ぐもの)
+%
+% 期待: Secure
+
+    load s, in
+    % この時点で s は High
+    
+    % NS (および SP) で s に依存したメモリアクセスを行う
+    % これによりベースライン観測が EqHigh になる
+    load z, s
+    
+    skip

@@ -1,0 +1,38 @@
+% Gadget: Spectre Variant 1 (Mitigated with Barrier)
+%
+% 概要:
+% Spectre V1 と同じロジックだが、境界チェック直後に投機バリア (spbarr) を挿入。
+% これにより、誤予測時でもバリア以降の命令は投機実行されない（探索が打ち切られる）。
+%
+% 期待: Secure
+% (投機パスがバリアで止まるため、Leak 地点に到達しない)
+
+    % 定数設定
+    size  <- 5
+    base1 <- 0x1000
+    base2 <- 0x2000
+
+    % 攻撃者入力
+    load r_idx, in
+    
+    % 境界チェック
+    cond <- r_idx < size
+    beqz cond, End
+
+    % --- Mitigation ---
+    % 投機バリア:
+    % 分岐予測が確定するまで後続命令を実行しない、あるいは投機実行をここで破棄する。
+    spbarr
+    
+    % --- Protected Region ---
+    
+    % 1. Out-of-Bounds Read
+    addr1 <- base1 + r_idx
+    load r_secret, addr1
+    
+    % 2. Dependent Load
+    addr2 <- base2 + r_secret
+    load r_temp, addr2
+
+End:
+    skip
