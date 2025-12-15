@@ -7,7 +7,7 @@ type Props = {
   rightSlot?: React.ReactNode;
 };
 
-const badgeStyles = {
+export const badgeStyles = {
   Secure: "bg-emerald-100 text-emerald-800 border border-emerald-200",
   SNI_Violation: "bg-red-100 text-red-800 border border-red-200",
 } as const;

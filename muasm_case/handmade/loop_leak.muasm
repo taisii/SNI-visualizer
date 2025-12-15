@@ -1,3 +1,7 @@
+% Case: Loop Leak
+% 概要: ループ構造を含むパスでの投機的実行におけるリーク検出を確認する。
+% 期待: SNI_Violation
+
     w <- 0
 Loop:
     x<-in>=bound

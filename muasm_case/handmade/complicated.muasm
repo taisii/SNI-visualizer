@@ -1,3 +1,7 @@
+% Case: Complicated Control Flow
+% 概要: 複数のループと分岐が絡み合う複雑な制御フローにおける解析精度を確認する。
+% 期待: SNI_Violation
+
 Luup:
     w <- 0
 Loop:

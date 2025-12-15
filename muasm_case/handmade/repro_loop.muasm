@@ -1,3 +1,7 @@
+% Case: Repro Loop (Secure)
+% 概要: シンプルな無限ループ/再帰構造。リークは意図されていない。
+% 期待: Secure
+
     w <- 0
 Loop:
     load r_val,r_ptr

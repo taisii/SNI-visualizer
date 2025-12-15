@@ -1,3 +1,7 @@
+% Case: Nested Loops/Branches
+% 概要: ネストされたループと分岐構造内での投機的実行の挙動とリーク検出を確認する。
+% 期待: SNI_Violation
+
     w <- 0
 Loop:
     w <- w+1
