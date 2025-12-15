@@ -4,6 +4,7 @@ type Props = {
   result: AnalysisResult["result"] | null;
   error?: AnalysisResult["error"];
   warnings?: AnalysisResult["warnings"];
+  rightSlot?: React.ReactNode;
 };
 
 const badgeStyles = {
@@ -11,7 +12,7 @@ const badgeStyles = {
   SNI_Violation: "bg-red-100 text-red-800 border border-red-200",
 } as const;
 
-export function Header({ result, error, warnings }: Props) {
+export function Header({ result, error, warnings, rightSlot }: Props) {
   const hasWarnings = Boolean(warnings && warnings.length > 0);
   const hasTopWarning = Boolean(
     warnings?.some((w) => w.type === "TopObserved"),
@@ -24,7 +25,8 @@ export function Header({ result, error, warnings }: Props) {
         </p>
         <h1 className="text-xl font-bold text-neutral-900">SNI 検証ツール</h1>
       </div>
-      <div className="flex flex-col items-end gap-1 text-sm">
+      <div className="flex items-center gap-4">
+        <div className="flex flex-col items-end gap-1 text-sm">
         {error ? (
           <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800 border border-amber-200">
             解析未完了 (Error)
@@ -50,6 +52,8 @@ export function Header({ result, error, warnings }: Props) {
             解析不能 (Top) を含む観測があり、結果は不確定です。
           </p>
         )}
+        </div>
+        {rightSlot}
       </div>
     </header>
   );

@@ -8,6 +8,7 @@ import { ControlPanel } from "./features/controls/ControlPanel";
 import { Header } from "./shared/Header";
 import { StateViewer } from "./features/visualization/StateViewer";
 import { VCFGView } from "./features/visualization/VCFGView";
+import { TestCaseLibrary } from "./features/test-cases/TestCaseLibrary";
 import { analyze } from "./features/analysis-runner/services/analyze";
 import { deriveControlState } from "./features/controls/control-state";
 import {
@@ -116,13 +117,18 @@ export default function Home() {
     return parts.join("\n");
   };
 
-  const handleAnalyze = async (modeOverride?: TraceMode) => {
+  const handleAnalyze = async (
+    modeOverride?: TraceMode,
+    sourceOverride?: string,
+  ) => {
     resetWarningsToast(lastWarningsToastRef);
     setIsLoading(true);
     setIsAutoPlay(false);
     try {
       const modeToUse = modeOverride ?? traceMode;
-      const analysis = await analyze(source, {
+      // sourceOverride があればそちらを優先、なければ state の source を使用
+      const sourceToUse = sourceOverride ?? source;
+      const analysis = await analyze(sourceToUse, {
         traceMode: modeToUse,
         specWindow,
       });
@@ -234,6 +240,20 @@ export default function Home() {
         result={result?.result ?? null}
         error={analysisError}
         warnings={result?.warnings}
+        rightSlot={
+          <div className="flex items-center gap-2">
+            <TestCaseLibrary
+              onSelect={(val) => {
+                setSource(val);
+                // 読み込み直後に解析実行 (sourceOverride を渡して即時実行)
+                // traceMode も指定したい場合は第一引数に渡すが、ここでは現在のモードを維持するか、
+                // あるいは明示的に 'bfs' などにする必要があるか検討。
+                // デフォルトの traceMode (state) を使うため undefined を渡す。
+                void handleAnalyze(undefined, val);
+              }}
+            />
+          </div>
+        }
       />
       <Toaster richColors position="bottom-right" />
       <main className="grid flex-1 grid-cols-1 gap-4 p-6 lg:grid-cols-2">
